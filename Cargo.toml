@@ -1,0 +1,26 @@
+[package]
+name = "testing"
+version = "0.1.0"
+authors = []
+edition = "2021"
+
+[package.metadata.skyline]
+titleid = "01006A800016E000" # Smash Ultimate
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+ninput = { path = "../ninput", version = "0.1.0" }
+paste = "1.0.15"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.147"
+skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
+tracing = "0.1.44"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
