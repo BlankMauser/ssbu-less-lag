@@ -1,3 +1,5 @@
+use crate::sequencing;
+
 /** Ultimate Render Pipeline Docs
  * Ultimate makes use of multi-threaded rendering, and does so very poorly.
  *
@@ -86,7 +88,7 @@
  * in situations where frame drops happen.
  */
 #[skyline::hook(offset = 0x3747b78, inline)]
-unsafe fn flush_swap_buffers_before_present(_: &skyline::hooks::InlineCtx) {
+unsafe fn flush_swap_buffers_before_present(ctx: &skyline::hooks::InlineCtx) {
     // SAFETY: This method is only ever called in one spot, this is effectively a local variable that we are using
     //      to cache the pointer.
     //
@@ -162,13 +164,26 @@ fn patch_render_sync_wait() {
         .unwrap();
 }
 
+#[skyline::hook(offset = 0x38601f8, inline)]
+unsafe fn set_num_window_textures(ctx: &skyline::hooks::InlineCtx) {
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb80)
+        .cast::<extern "C" fn(u64, i32)>();
+    func_ptr(*((ctx.registers[23].x() + 0x10) as *const u64), 2);
+}
+
 pub fn install(is_vsync_disabled: bool) {
     patch_swap_flush_call();
     use_current_frame_index();
 
-    if is_vsync_disabled {
-        patch_render_sync_wait();
-    }
+    // if is_vsync_disabled {
+    patch_render_sync_wait();
+    // }
 
-    skyline::install_hooks!(flush_swap_buffers_before_present, full_swapchain_flush);
+    skyline::install_hooks!(
+        flush_swap_buffers_before_present,
+        full_swapchain_flush,
+        set_num_window_textures
+    );
 }

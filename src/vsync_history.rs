@@ -1,9 +1,8 @@
-use std::{
-    collections::{BTreeMap, HashMap},
-    sync::Mutex,
-};
+use std::sync::atomic::Ordering;
 
 use skyline::{hooks::InlineCtx, patching::Patch};
+
+use crate::profiling::OsTick;
 
 #[repr(u64)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd, Ord)]
@@ -62,30 +61,6 @@ unsafe extern "C" {
 
 static mut SYSTEM_EVENT: SystemEvent = SystemEvent([0u8; 256]);
 
-#[derive(Default, Copy, Clone)]
-pub struct ApplicationFrameInfo {
-    pub acquire_invocation: i64,
-    pub acquire_finish: i64,
-    pub sync_finish: i64,
-    pub init_exit: i64,
-    pub input: i64,
-}
-
-impl ApplicationFrameInfo {
-    const fn new() -> Self {
-        Self {
-            acquire_invocation: 0,
-            acquire_finish: 0,
-            sync_finish: 0,
-            init_exit: 0,
-            input: 0,
-        }
-    }
-}
-
-pub static mut FRAMES_IN_FLIGHT: [ApplicationFrameInfo; 3] =
-    [const { ApplicationFrameInfo::new() }; 3];
-
 static mut LAYER: Layer = Layer(std::ptr::null_mut());
 
 #[skyline::hook(offset = 0x386fca0, inline)]
@@ -107,19 +82,29 @@ unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
     let finish_tick = get_system_tick();
     ctx.registers[0].set_w(result);
 
-    // println!("Acquired {}", *frame_ptr);
-
     if result == 0 {
-        FRAMES_IN_FLIGHT[*frame_ptr as usize].acquire_invocation = invocation_tick;
-        FRAMES_IN_FLIGHT[*frame_ptr as usize].acquire_finish = finish_tick;
+        crate::profiling::start_frame(OsTick::new(invocation_tick));
+        crate::profiling::span(
+            "nvnWindowAcquireTexture",
+            OsTick::new(invocation_tick),
+            OsTick::new(finish_tick),
+        );
     }
 }
 
-#[skyline::hook(offset = 0x386fce0, inline)]
-unsafe fn record_sync_finish(ctx: &InlineCtx) {
-    let ptr = (ctx.registers[23].x() + 0x30) as *const i32;
+#[skyline::hook(offset = 0x386fcdc, inline)]
+unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
+    let function = std::mem::transmute::<_, extern "C" fn(u64, u64) -> u32>(ctx.registers[8].x());
+    crate::profiling::start_span(
+        "nvnWaitSync(pTextureAvailable)",
+        OsTick::new(get_system_tick()),
+    );
 
-    FRAMES_IN_FLIGHT[*ptr as usize].sync_finish = get_system_tick();
+    let result = function(ctx.registers[0].x(), ctx.registers[1].x());
+    ctx.registers[0].set_w(result);
+
+    crate::profiling::end_span(OsTick::new(get_system_tick()));
+    // let function = *(&const raw ctx.registers[8].x()).cast::<extern "C" fn(u64, u64)>();
 }
 
 #[skyline::hook(offset = 0x386fc80, inline)]
@@ -143,24 +128,7 @@ unsafe fn present_texture_wrapper(ctx: &InlineCtx) {
 
     let mut frame_number = 0u64;
     if get_latest_frame_number(&mut frame_number, LAYER) == 0 {
-        let frame_in_flight = FRAMES_IN_FLIGHT[frame as usize];
-        crate::frametracer::frame(
-            "window_acquire",
-            frame_number as usize,
-            frame_in_flight.acquire_finish,
-        );
-        crate::frametracer::frame(
-            "wait_texture",
-            frame_number as usize,
-            frame_in_flight.sync_finish,
-        );
-        crate::frametracer::frame(
-            "previous_submit_finish",
-            frame_number as usize,
-            frame_in_flight.init_exit,
-        );
-        crate::frametracer::frame("poll_inputs", frame_number as usize, frame_in_flight.input);
-        crate::frametracer::frame("queue_present", frame_number as usize, present_tick);
+        crate::profiling::submit_frame(frame_number as usize, OsTick::new(present_tick));
     }
 }
 
@@ -182,40 +150,26 @@ pub fn vsync_thread(layer: Layer, display: Display) {
         unsafe {
             wait_system_event(&mut system_event);
         }
+        crate::vsync::RUN.store(true, Ordering::SeqCst);
 
         let num_frames =
             unsafe { list_frame_info(frame_infos.as_mut_ptr(), max_frame_info, layer) };
-
-        println!("{:?}", &frame_infos[..num_frames as usize]);
 
         for frame_info in &frame_infos[..num_frames as usize] {
             match frame_info.status {
                 FrameStatus::Unknown => {}
                 FrameStatus::Enqueued => {
                     if frame_info.frame_number > last_frame_enqueued {
-                        crate::frametracer::frame(
-                            "vi_enqueue",
-                            frame_info.frame_number as usize,
-                            frame_info.enqueue_time,
-                        );
                         last_frame_enqueued = frame_info.frame_number;
                     }
                 }
                 FrameStatus::Presented => {
                     if frame_info.frame_number > last_frame_presented {
-                        println!("Finishing!");
-                        crate::frametracer::frame(
-                            "vi_presented",
+                        crate::profiling::finish_frame(
                             frame_info.frame_number as usize,
-                            frame_info.enqueue_time,
+                            OsTick::new(frame_info.present_time),
                         );
-                        crate::frametracer::frame(
-                            "vi_vblank",
-                            frame_info.frame_number as usize,
-                            frame_info.vblank_time,
-                        );
-                        crate::frametracer::finish_frame(frame_info.frame_number as usize);
-                        crate::frametracer::marker("vblank", frame_info.vblank_time);
+                        crate::profiling::vblank(OsTick::new(frame_info.vblank_time));
                         last_frame_presented = frame_info.frame_number;
                     }
                 }
@@ -278,37 +232,158 @@ pub unsafe fn current_frame_in_flight() -> i32 {
     *ptr.cast::<u8>().add(0x30).cast::<i32>()
 }
 
-#[skyline::hook(offset = 0x386ff14, inline)]
-unsafe fn record_init_exit(ctx: &InlineCtx) {
-    let tick = get_system_tick();
-    let p_frame = (*((ctx.registers[19].x() + 0xa8) as *const u64) + 0x30) as *const i32;
-    FRAMES_IN_FLIGHT[*p_frame as usize].init_exit = tick;
-}
-
-#[skyline::hook(offset = 0x374c118, inline)]
-unsafe fn record_input(ctx: &InlineCtx) {
-    let tick = get_system_tick();
-    // println!("{}", current_frame_in_flight());
-    FRAMES_IN_FLIGHT[current_frame_in_flight() as usize].input = tick;
-}
-
 #[skyline::hook(offset = 0x386ff28, inline)]
 fn print_sync_wait_result(ctx: &InlineCtx) {
     println!("Sync Wait: {}", ctx.registers[8].x());
+}
+
+#[skyline::from_offset(0x3864700)]
+fn init_renderpasses(arg: u64);
+
+#[skyline::hook(offset = 0x374b11c, inline)]
+fn profile_init_renderpass(ctx: &InlineCtx) {
+    crate::profiling::start_span(
+        "InitRenderpasses",
+        OsTick::new(unsafe { get_system_tick() }),
+    );
+    unsafe { init_renderpasses(ctx.registers[0].x()) };
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::from_offset(0x3549170)]
+fn init_task_worker(arg1: u64, arg2: u64, arg3: u32, arg4: u32);
+
+#[skyline::hook(offset = 0x374b4f4, inline)]
+fn profile_init_ui(ctx: &InlineCtx) {
+    crate::profiling::start_span(
+        "InitUiTaskWorker",
+        OsTick::new(unsafe { get_system_tick() }),
+    );
+    unsafe {
+        init_task_worker(
+            ctx.registers[0].x(),
+            ctx.registers[1].x(),
+            ctx.registers[2].w(),
+            ctx.registers[3].w(),
+        )
+    };
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374b524, inline)]
+fn profile_init_vfx(ctx: &InlineCtx) {
+    crate::profiling::start_span(
+        "InitVfxTaskWorker",
+        OsTick::new(unsafe { get_system_tick() }),
+    );
+    unsafe {
+        init_task_worker(
+            ctx.registers[0].x(),
+            ctx.registers[1].x(),
+            ctx.registers[2].w(),
+            ctx.registers[3].w(),
+        )
+    };
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374b554, inline)]
+fn profile_init_battle(ctx: &InlineCtx) {
+    crate::profiling::start_span(
+        "InitBattleTaskWorker",
+        OsTick::new(unsafe { get_system_tick() }),
+    );
+    unsafe {
+        init_task_worker(
+            ctx.registers[0].x(),
+            ctx.registers[1].x(),
+            ctx.registers[2].w(),
+            ctx.registers[3].w(),
+        )
+    };
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374b2b0)]
+fn profile_unk_taskworker1(ctx: &InlineCtx) {
+    crate::profiling::start_span("UnkTaskWorker1", OsTick::new(unsafe { get_system_tick() }));
+
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x3724a80)]
+fn scene_manager_update(manager: u64) {
+    crate::profiling::start_span("RunSceneManager", OsTick::new(unsafe { get_system_tick() }));
+    call_original!(manager);
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374bd9c, inline)]
+fn cmdbuf_reset_span_start(_: &InlineCtx) {
+    crate::profiling::start_span(
+        "CommandBufferReset",
+        OsTick::new(unsafe { get_system_tick() }),
+    );
+}
+
+#[skyline::hook(offset = 0x374bfe8, inline)]
+fn cmdbuf_reset_span_end(_: &InlineCtx) {
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374b308, inline)]
+fn mutex_lock_span_begin(_: &InlineCtx) {
+    crate::profiling::start_span("MutexLock", OsTick::new(unsafe { get_system_tick() }));
+}
+#[skyline::hook(offset = 0x374b4b4, inline)]
+fn mutex_lock_span_end(_: &InlineCtx) {
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374b130, inline)]
+fn looping_span_begin(_: &InlineCtx) {
+    crate::profiling::start_span("Looping", OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::hook(offset = 0x374b160, inline)]
+fn looping_span_end(_: &InlineCtx) {
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
+}
+
+#[skyline::from_offset(0x3619080)]
+fn ui_update(arg: u64);
+
+#[skyline::hook(offset = 0x374b124, inline)]
+fn call_ui_update(ctx: &InlineCtx) {
+    crate::profiling::start_span("UiUpdate", OsTick::new(unsafe { get_system_tick() }));
+    unsafe {
+        ui_update(ctx.registers[0].x());
+    }
+    crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
 pub fn install() {
     Patch::in_text(0x3860674).nop().unwrap();
     Patch::in_text(0x386fca0).nop().unwrap();
     Patch::in_text(0x386fc80).nop().unwrap();
+    Patch::in_text(0x386fcdc).nop().unwrap();
+    Patch::in_text(0x374b11c).nop().unwrap();
+    Patch::in_text(0x374b124).nop().unwrap();
     Patch::in_text(0x3810a40).data(0xD65F03C0u32).unwrap();
 
     skyline::install_hooks!(
         grab_vi_layer_handle,
         present_texture_wrapper,
         call_acquire_texture_wrapper,
-        record_sync_finish,
-        record_init_exit,
-        record_input
+        profile_sync_wait,
+        scene_manager_update,
+        profile_init_renderpass,
+        cmdbuf_reset_span_start,
+        cmdbuf_reset_span_end,
+        mutex_lock_span_begin,
+        mutex_lock_span_end,
+        looping_span_begin,
+        looping_span_end,
+        call_ui_update
     );
 }
