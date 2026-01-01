@@ -118,15 +118,16 @@ fn serialize_span(span: &FrameSpan, buffer: &mut Vec<u8>) {
 fn serialize_frame(
     frame: &SubmittedFrame,
     frame_index: u64,
+    dangled: bool,
     presented: OsTick,
     buffer: &mut Vec<u8>,
 ) {
-    buffer.clear();
     buffer.push(0u8);
     buffer.extend_from_slice(&frame_index.to_le_bytes());
     buffer.extend_from_slice(&frame.start.0.to_le_bytes());
     buffer.extend_from_slice(&frame.submitted_at.0.to_le_bytes());
     buffer.extend_from_slice(&presented.0.to_le_bytes());
+    buffer.extend_from_slice(&[dangled as u8]);
     buffer.extend_from_slice(&frame.spans.len().to_le_bytes());
     for span in frame.spans.iter() {
         serialize_span(span, buffer);
@@ -197,7 +198,23 @@ fn thread(receiver: Receiver<Item>) {
                                 continue;
                             };
 
-                            serialize_frame(&frame, frame_index as u64, tick, &mut buffer);
+                            while submitted_frames
+                                .first_entry()
+                                .is_some_and(|frame| *frame.key() < frame_index)
+                            {
+                                let (frame_index, dangled) =
+                                    unsafe { submitted_frames.pop_first().unwrap_unchecked() };
+                                println!("[ERROR] Dangling frame {frame_index} left in profiler");
+                                serialize_frame(
+                                    &dangled,
+                                    frame_index as u64,
+                                    true,
+                                    tick,
+                                    &mut buffer,
+                                );
+                            }
+
+                            serialize_frame(&frame, frame_index as u64, false, tick, &mut buffer);
                         }
                         Item::StartSpan { name, tick } => {
                             let Some(frame) = frame_in_flight.as_mut() else {

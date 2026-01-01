@@ -1,8 +1,9 @@
 use std::sync::atomic::Ordering;
 
+use ninput::Controller;
 use skyline::{hooks::InlineCtx, patching::Patch};
 
-use crate::profiling::OsTick;
+use crate::{change_thread_priority, get_current_thread, profiling::OsTick};
 
 #[repr(u64)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd, Ord)]
@@ -62,10 +63,15 @@ unsafe extern "C" {
 static mut SYSTEM_EVENT: SystemEvent = SystemEvent([0u8; 256]);
 
 static mut LAYER: Layer = Layer(std::ptr::null_mut());
+static mut DISPLAY: Display = Display(std::ptr::null_mut());
+static mut FRAME_INFOS: Vec<FrameInfo> = Vec::new();
+static mut LAST_ENQUEUED: usize = 0;
+static mut LAST_PRESENTED: usize = 0;
 
 #[skyline::hook(offset = 0x386fca0, inline)]
 unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
     static mut ACQUIRE_TEXTURE_PTR: Option<extern "C" fn(u64, u64, *mut i32) -> u32> = None;
+    static mut QUEUE_WAIT_SYNC_PTR: Option<extern "C" fn(u64, u64)> = None;
     if ACQUIRE_TEXTURE_PTR.is_none() {
         let base = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text);
         ACQUIRE_TEXTURE_PTR = Some(*base.cast::<u8>().add(0x593fb50).cast::<extern "C" fn(
@@ -73,6 +79,12 @@ unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
             u64,
             *mut i32,
         ) -> u32>());
+        QUEUE_WAIT_SYNC_PTR = Some(
+            *base
+                .cast::<u8>()
+                .add(0x5940880)
+                .cast::<extern "C" fn(u64, u64)>(),
+        );
     }
 
     let ptr = ACQUIRE_TEXTURE_PTR.unwrap_unchecked();
@@ -83,28 +95,74 @@ unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
     ctx.registers[0].set_w(result);
 
     if result == 0 {
-        crate::profiling::start_frame(OsTick::new(invocation_tick));
         crate::profiling::span(
             "nvnWindowAcquireTexture",
             OsTick::new(invocation_tick),
             OsTick::new(finish_tick),
         );
+
+        (QUEUE_WAIT_SYNC_PTR.unwrap_unchecked())(
+            *((ctx.registers[23].x() + 0x18) as *const u64),
+            ctx.registers[1].x(),
+        );
     }
 }
 
-#[skyline::hook(offset = 0x386fcdc, inline)]
+#[skyline::hook(offset = 0x374c118, inline)]
 unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
-    let function = std::mem::transmute::<_, extern "C" fn(u64, u64) -> u32>(ctx.registers[8].x());
+    static mut SYNC_WAIT: Option<extern "C" fn(u64, u64) -> u64> = None;
+
+    if SYNC_WAIT.is_none() {
+        SYNC_WAIT = Some(
+            *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+                .cast::<u8>()
+                .add(0x5940878)
+                .cast::<extern "C" fn(u64, u64) -> u64>(),
+        );
+    }
+
+    let p_singleton = *((ctx.sp.x() + 0x268) as *const u64);
+    let p_swapchain = **((p_singleton + 0x8) as *const *const u64);
+    let p_gfx_device = *((p_swapchain + 0xa8) as *const u64);
+    let p_render_sync = *((p_gfx_device + 0x20) as *const u64);
+    let p_texture_sync = *((p_gfx_device + 0x28) as *const u64);
+
     crate::profiling::start_span(
         "nvnWaitSync(pTextureAvailable)",
         OsTick::new(get_system_tick()),
     );
 
-    let result = function(ctx.registers[0].x(), ctx.registers[1].x());
-    ctx.registers[0].set_w(result);
+    (SYNC_WAIT.unwrap_unchecked())(p_texture_sync, u64::MAX);
 
     crate::profiling::end_span(OsTick::new(get_system_tick()));
-    // let function = *(&const raw ctx.registers[8].x()).cast::<extern "C" fn(u64, u64)>();
+
+    crate::profiling::start_span("WaitForVBlank", OsTick::new(get_system_tick()));
+
+    unsafe {
+        wait_system_event(&mut SYSTEM_EVENT);
+    }
+
+    crate::profiling::end_span(OsTick::new(get_system_tick()));
+
+    let num_frames =
+        unsafe { list_frame_info(FRAME_INFOS.as_mut_ptr(), FRAME_INFOS.len() as i32, LAYER) };
+
+    for frame_info in &FRAME_INFOS[..num_frames as usize] {
+        match frame_info.status {
+            FrameStatus::Unknown => {}
+            FrameStatus::Enqueued => {}
+            FrameStatus::Presented => {
+                if frame_info.frame_number > LAST_PRESENTED as u64 {
+                    crate::profiling::finish_frame(
+                        frame_info.frame_number as usize,
+                        OsTick::new(frame_info.present_time),
+                    );
+                    crate::profiling::vblank(OsTick::new(frame_info.vblank_time));
+                    LAST_PRESENTED = frame_info.frame_number as usize;
+                }
+            }
+        }
+    }
 }
 
 #[skyline::hook(offset = 0x386fc80, inline)]
@@ -129,6 +187,7 @@ unsafe fn present_texture_wrapper(ctx: &InlineCtx) {
     let mut frame_number = 0u64;
     if get_latest_frame_number(&mut frame_number, LAYER) == 0 {
         crate::profiling::submit_frame(frame_number as usize, OsTick::new(present_tick));
+        crate::profiling::start_frame(OsTick::new(present_tick));
     }
 }
 
@@ -150,7 +209,7 @@ pub fn vsync_thread(layer: Layer, display: Display) {
         unsafe {
             wait_system_event(&mut system_event);
         }
-        crate::vsync::RUN.store(true, Ordering::SeqCst);
+        // crate::vsync::RUN.store(true, Ordering::SeqCst);
 
         let num_frames =
             unsafe { list_frame_info(frame_infos.as_mut_ptr(), max_frame_info, layer) };
@@ -185,56 +244,16 @@ unsafe fn grab_vi_layer_handle(ctx: &InlineCtx) {
     let display = *((p_display_info + 0x70) as *const Display);
     let layer = *((p_display_info + 0x78) as *const Layer);
 
+    DISPLAY = display;
     LAYER = layer;
 
-    let _ = std::thread::spawn(move || {
-        vsync_thread(layer, display);
-    });
-}
-
-pub unsafe fn flush() {
-    static mut POINTER: Option<*const ()> = None;
-    if POINTER.is_none() {
-        POINTER = Some(
-            *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-                .cast::<u8>()
-                .add(0x5334e90)
-                .cast::<*const ()>(),
-        );
+    unsafe {
+        assert_eq!(get_display_vsync_event(&mut SYSTEM_EVENT, display), 0);
     }
 
-    let ptr = POINTER.unwrap_unchecked().cast::<*const ()>();
-    let ptr = **ptr.cast::<*const *const ()>().add(1);
-    let sub_ptr = *ptr.cast::<*const ()>().add(0x88 / 8);
-    let flag = *ptr.cast::<u8>().add(0xec);
-    let function = *(*sub_ptr.cast::<*const *const ()>())
-        .add(0x3)
-        .cast::<extern "C" fn(*const (), u8)>();
+    let max_frame_info = unsafe { list_frame_info(std::ptr::null_mut(), 0, layer) };
 
-    function(sub_ptr, flag);
-    *ptr.cast::<u8>().cast_mut().add(0xec) = 0;
-}
-
-pub unsafe fn current_frame_in_flight() -> i32 {
-    static mut POINTER: Option<*const ()> = None;
-    if POINTER.is_none() {
-        POINTER = Some(
-            *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-                .cast::<u8>()
-                .add(0x5334e90)
-                .cast::<*const ()>(),
-        );
-    }
-
-    let ptr = POINTER.unwrap_unchecked().cast::<*const ()>();
-    let ptr = **ptr.cast::<*const *const ()>().add(1);
-    let ptr = *ptr.cast::<u8>().add(0xa8).cast::<*const ()>();
-    *ptr.cast::<u8>().add(0x30).cast::<i32>()
-}
-
-#[skyline::hook(offset = 0x386ff28, inline)]
-fn print_sync_wait_result(ctx: &InlineCtx) {
-    println!("Sync Wait: {}", ctx.registers[8].x());
+    FRAME_INFOS = vec![FrameInfo::default(); max_frame_info as usize];
 }
 
 #[skyline::from_offset(0x3864700)]
@@ -366,16 +385,16 @@ pub fn install() {
     Patch::in_text(0x3860674).nop().unwrap();
     Patch::in_text(0x386fca0).nop().unwrap();
     Patch::in_text(0x386fc80).nop().unwrap();
-    Patch::in_text(0x386fcdc).nop().unwrap();
     Patch::in_text(0x374b11c).nop().unwrap();
     Patch::in_text(0x374b124).nop().unwrap();
     Patch::in_text(0x3810a40).data(0xD65F03C0u32).unwrap();
+    Patch::in_text(0x386fcdc).nop().unwrap();
+    Patch::in_text(0x22deb84).data(0xD2800008u32).unwrap();
 
     skyline::install_hooks!(
         grab_vi_layer_handle,
         present_texture_wrapper,
         call_acquire_texture_wrapper,
-        profile_sync_wait,
         scene_manager_update,
         profile_init_renderpass,
         cmdbuf_reset_span_start,
@@ -384,6 +403,7 @@ pub fn install() {
         mutex_lock_span_end,
         looping_span_begin,
         looping_span_end,
-        call_ui_update
+        call_ui_update,
+        profile_sync_wait,
     );
 }

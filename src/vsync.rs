@@ -79,7 +79,7 @@ pub fn install(profiling_enabled: bool) {
     }
 
     skyline::install_hooks!(
-        run_scene_update,
+        // run_scene_update,
         set_present_interval_nvn,
         set_present_interval_android
     );

@@ -1,5 +1,7 @@
 use skyline::hooks::InlineCtx;
 
+use crate::{profiling::OsTick, vsync_history::get_system_tick};
+
 /** Updates the models of every battle object to match their animation
  *
  * We have to call this manually, normally it's called from TaskWorker2
@@ -70,7 +72,7 @@ unsafe fn start_task_worker_queue(pointer: *mut (), function_ptr: *const ()) {
  * it's decently fast but I don't know
  */
 #[skyline::hook(offset = 0x374c7b4, inline)]
-pub unsafe fn post_scene_update_submit_render(_: &InlineCtx) {
+pub unsafe fn post_scene_update_submit_render(ctx: &InlineCtx) {
     // SAFETY: These are basically local variables or global constants, and we cache them so that we don't have to fetch them every time from the skyline API
     static mut P_BATTLE_OBJECT_MANAGER: *const *const () = std::ptr::null();
     static mut P_TASK_WORKER_QUEUE: *mut () = std::ptr::null_mut();
@@ -79,6 +81,7 @@ pub unsafe fn post_scene_update_submit_render(_: &InlineCtx) {
     static mut UI_RENDER_COMMANDS_FN_PTR: *const () = std::ptr::null();
     static mut FIGHTER_RENDER_COMMANDS_FN_PTR: *const () = std::ptr::null();
     static mut TLS_SLOT_ARRAY_START: *const () = std::ptr::null();
+    static mut SYNC_WAIT: Option<extern "C" fn(u64, u64) -> u64> = None;
     static mut DID_INIT: bool = false;
 
     if !DID_INIT {
@@ -91,6 +94,7 @@ pub unsafe fn post_scene_update_submit_render(_: &InlineCtx) {
         UI_RENDER_COMMANDS_FN_PTR = base.add(0x374d550).cast();
         FIGHTER_RENDER_COMMANDS_FN_PTR = base.add(0x374f050).cast();
         TLS_SLOT_ARRAY_START = base.add(0x5332f58).cast();
+        SYNC_WAIT = Some(*base.add(0x5940878).cast::<extern "C" fn(u64, u64) -> u64>());
     }
 
     if !(*P_BATTLE_OBJECT_MANAGER).is_null() {
@@ -98,23 +102,7 @@ pub unsafe fn post_scene_update_submit_render(_: &InlineCtx) {
     }
 
     // I don't know how much memory this actually takes up but I'm sure it's not *that* much
-    // let mut eff_worker_info = [0u32; 16];
     let mut fighter_worker_info = [0u32; 16];
-    // let mut ui_worker_info = [0u32; 16];
-
-    // initialize_task_worker(
-    //     eff_worker_info.as_mut_ptr().cast(),
-    //     EFF_RENDER_COMMANDS_FN_PTR,
-    //     2,
-    //     0,
-    // );
-
-    // initialize_task_worker(
-    //     ui_worker_info.as_mut_ptr().cast(),
-    //     UI_RENDER_COMMANDS_FN_PTR,
-    //     1,
-    //     0,
-    // );
 
     initialize_task_worker(
         fighter_worker_info.as_mut_ptr().cast(),
@@ -122,15 +110,6 @@ pub unsafe fn post_scene_update_submit_render(_: &InlineCtx) {
         0,
         0,
     );
-
-    // if eff_worker_info[4] != 0 {
-    //     let tls_slot = *(*TLS_SLOT_ARRAY_START
-    //         .cast::<*const u8>()
-    //         .add(eff_worker_info[5] as usize))
-    //     .add(0x10)
-    //     .cast::<u32>();
-    //     wait_task_worker(tls_slot, eff_worker_info.as_mut_ptr().add(4));
-    // }
 
     if fighter_worker_info[4] != 0 {
         let tls_slot = *(*TLS_SLOT_ARRAY_START
@@ -141,14 +120,19 @@ pub unsafe fn post_scene_update_submit_render(_: &InlineCtx) {
         wait_task_worker(tls_slot, fighter_worker_info.as_mut_ptr().add(4));
     }
 
-    // if ui_worker_info[4] != 0 {
-    //     let tls_slot = *(*TLS_SLOT_ARRAY_START
-    //         .cast::<*const u8>()
-    //         .add(ui_worker_info[5] as usize))
-    //     .add(0x10)
-    //     .cast::<u32>();
-    //     wait_task_worker(tls_slot, ui_worker_info.as_mut_ptr().add(4));
-    // }
+    // crate::profiling::start_span(
+    //     "nvnWaitSync(pRenderFinished)",
+    //     OsTick::new(get_system_tick()),
+    // );
+
+    // let p_singleton = *((ctx.sp.x() + 0x268) as *const u64);
+    // let p_swapchain = **((p_singleton + 0x8) as *const *const u64);
+    // let p_gfx_device = *((p_swapchain + 0xa8) as *const u64);
+    // let p_render_sync = *((p_gfx_device + 0x20) as *const u64);
+    // let p_texture_sync = *((p_gfx_device + 0x28) as *const u64);
+
+    // (SYNC_WAIT.unwrap_unchecked())(p_render_sync, u64::MAX);
+    // crate::profiling::end_span(OsTick::new(get_system_tick()));
 
     start_task_worker_queue(P_TASK_WORKER_QUEUE, SUBMIT_COMMANDS_FN_PTR);
 }
@@ -183,8 +167,6 @@ fn prevent_task_worker_updating_models() {
  */
 fn prevent_fighter_render_command_recording() {
     skyline::patching::Patch::in_text(0x374b554).nop().unwrap();
-    // skyline::patching::Patch::in_text(0x374b524).nop().unwrap();
-    // skyline::patching::Patch::in_text(0x374b4f4).nop().unwrap();
 }
 
 pub fn install() {
@@ -192,5 +174,5 @@ pub fn install() {
     prevent_task_worker_updating_models();
     prevent_fighter_render_command_recording();
 
-    // skyline::install_hook!(post_scene_update_submit_render);
+    skyline::install_hook!(post_scene_update_submit_render);
 }

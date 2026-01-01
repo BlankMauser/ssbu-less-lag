@@ -34,7 +34,10 @@ static mut TOP: Option<Instant> = None;
 // 374b4d4
 #[skyline::hook(offset = 0x374b290, inline)]
 pub unsafe fn run_scene_manager(ctx: &InlineCtx) {
-    let ptr = *((ctx.sp.x() + 608) as *const u64);
+    let ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593a4c0)
+        .cast::<u64>();
 
     TOP = Some(Instant::now());
 
@@ -125,6 +128,6 @@ fn patch_sync_wait() {
 
 pub fn install() {
     patch_scene_manager_calls();
-    // patch_sync_wait();
-    // skyline::install_hooks!(run_scene_manager);
+    patch_sync_wait();
+    skyline::install_hooks!(run_scene_manager);
 }
