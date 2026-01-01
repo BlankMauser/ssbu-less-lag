@@ -125,15 +125,15 @@ unsafe fn flush_swap_buffers_before_present(ctx: &skyline::hooks::InlineCtx) {
  */
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
-    // call_original!(arg1, arg2);
-    // call_original!(arg1, arg2);
-    // call_original!(arg1, arg2);
-    if *(arg1 as *const u8).add(0x1d18) != 0 {
-        *(arg1 as *mut u8).add(0x1d30).cast::<u64>() =
-            (!*(arg1 as *const u8).add(0x1d20).cast::<u32>() & 1) as u64;
-        *(arg1 as *mut u8).add(0x1d28) = 1;
-    }
-    call_original!(arg1, arg2)
+    call_original!(arg1, arg2);
+    call_original!(arg1, arg2);
+    call_original!(arg1, arg2);
+    // if *(arg1 as *const u8).add(0x1d18) != 0 {
+    //     *(arg1 as *mut u8).add(0x1d30).cast::<u64>() =
+    //         (!*(arg1 as *const u8).add(0x1d20).cast::<u32>() & 1) as u64;
+    //     *(arg1 as *mut u8).add(0x1d28) = 1;
+    // }
+    // call_original!(arg1, arg2)
     // static mut RUN_COUNT: usize = 0;
     // if RUN_COUNT == 1 {
     //     call_original!(arg1, arg2);
@@ -169,7 +169,7 @@ fn use_current_frame_index() {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
+    ctx.registers[9].set_x((ctx.registers[9].x()) % 2);
 }
 
 /** This disables a sync that is signaled by rendering wrapping up
@@ -195,7 +195,7 @@ unsafe fn set_num_window_textures(ctx: &skyline::hooks::InlineCtx) {
 }
 
 pub fn install(is_vsync_disabled: bool) {
-    // patch_swap_flush_call();
+    patch_swap_flush_call();
     use_current_frame_index();
 
     // if is_vsync_disabled {
@@ -203,7 +203,7 @@ pub fn install(is_vsync_disabled: bool) {
     // }
 
     skyline::install_hooks!(
-        // flush_swap_buffers_before_present,
+        flush_swap_buffers_before_present,
         full_swapchain_flush,
         use_next_frame_index,
         set_num_window_textures
