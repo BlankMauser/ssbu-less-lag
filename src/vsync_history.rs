@@ -1,6 +1,6 @@
 use std::sync::atomic::Ordering;
 
-use ninput::Controller;
+//use ninput::Controller;
 use skyline::{hooks::InlineCtx, patching::Patch};
 
 use crate::{change_thread_priority, get_current_thread, profiling::OsTick};
