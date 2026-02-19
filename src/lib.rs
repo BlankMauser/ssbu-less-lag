@@ -12,6 +12,7 @@ mod vsync_history;
 pub struct SsbuSyncConfig {
     pub disable_vsync: bool,
     pub disable_pacer: bool,
+    pub enable_triple_buffer: bool,
     pub emulator_check: Option<bool>,
 }
 
@@ -20,7 +21,8 @@ impl Default for SsbuSyncConfig {
         Self {
             disable_vsync: true,
             disable_pacer: false,
-            emulator_check: None,
+            enable_triple_buffer: false,
+            emulator_check: Some(is_emulator()),
         }
     }
 }
@@ -46,11 +48,11 @@ unsafe extern "C" {
     pub fn change_thread_priority(thread: u64, prio: i32);
 }
 
-pub fn install_ssbu_sync(config: SsbuSyncConfig) {
+pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
 
     vsync_history::install();
-    swapchain::install(config.disable_vsync, emulator);
+    swapchain::install(config);
     off_by_one::install();
 
     // Emulator always forces pacer-disable
@@ -59,10 +61,18 @@ pub fn install_ssbu_sync(config: SsbuSyncConfig) {
     }
 }
 
+pub fn Enable_Double_Buffer() {
+    swapchain::enable_double_buffer();
+}
+
+pub fn Enable_Triple_Buffer() {
+    swapchain::enable_triple_buffer();
+}
+
 #[cfg(feature = "nro-entry")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
-    install_ssbu_sync(SsbuSyncConfig::default());
+    Install_SSBU_Sync(SsbuSyncConfig::default());
     // profiling::setup();
     // sequencing::install();
 }

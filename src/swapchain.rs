@@ -1,4 +1,5 @@
 use crate::sequencing;
+use super::*;
 
 /** Ultimate Render Pipeline Docs
  * Ultimate makes use of multi-threaded rendering, and does so very poorly.
@@ -176,8 +177,13 @@ fn use_current_frame_index() {
 // SSBU is triple buffered. Sets render target index to 2 past freshly acquired texture normally.
 // This patches it to +1 modulo 2 instead of +2. Change to modulo 3 for triple buffer.
 #[skyline::hook(offset = 0x386ab4c, inline)]
-fn use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
+fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
+}
+
+#[skyline::hook(offset = 0x386ab4c, inline)]
+fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
+    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 3);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
@@ -198,9 +204,9 @@ fn patch_render_sync_wait() {
         .unwrap();
 }
 
-// Can be called at runtime. Sets to 2 = double buffer.
+// Can be called at runtime. Set to 2 = double buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
-unsafe fn set_num_window_textures(ctx: &skyline::hooks::InlineCtx) {
+unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
     let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
         .cast::<u8>()
         .add(0x593fb80)
@@ -208,8 +214,42 @@ unsafe fn set_num_window_textures(ctx: &skyline::hooks::InlineCtx) {
     func_ptr(*((ctx.registers[23].x() + 0x10) as *const u64), 2);
 }
 
-pub fn install(is_vsync_disabled: bool, emulator: bool) {
-    if emulator{
+// Set to 3 = triple buffer.
+#[skyline::hook(offset = 0x38601f8, inline)]
+unsafe fn set_triple_window_textures(ctx: &skyline::hooks::InlineCtx) {
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb80)
+        .cast::<extern "C" fn(u64, i32)>();
+    func_ptr(*((ctx.registers[23].x() + 0x10) as *const u64), 3);
+}
+
+fn install_buffer_impl(triple: bool) {
+    if triple {
+        skyline::install_hooks!(
+            use_next_frame_index_triple,
+            set_triple_window_textures
+        );
+    } else {
+        skyline::install_hooks!(
+            use_next_frame_index_double,
+            set_double_window_textures
+        );
+    }
+}
+
+pub fn enable_double_buffer() {
+    install_buffer_impl(false);
+}
+
+pub fn enable_triple_buffer() {
+    install_buffer_impl(true);
+}
+
+pub fn install(config: SsbuSyncConfig) {
+    let emulator = config.emulator_check.unwrap();
+    
+    if emulator {
         patch_swap_flush_call();
     }
     use_current_frame_index();
@@ -223,13 +263,13 @@ pub fn install(is_vsync_disabled: bool, emulator: bool) {
         flush_swap_buffers_before_present,
         emu_full_swapchain_flush,
         emu_use_next_frame_index,
-        set_num_window_textures
+        set_double_window_textures
     );
     } else {
         skyline::install_hooks!(
             full_swapchain_flush,
-            use_next_frame_index,
-            set_num_window_textures
         );
+        install_buffer_impl(config.enable_triple_buffer);
+        
     }
 }

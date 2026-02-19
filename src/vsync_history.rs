@@ -1,9 +1,6 @@
-use std::sync::atomic::Ordering;
-
-//use ninput::Controller;
 use skyline::{hooks::InlineCtx, patching::Patch};
 
-use crate::{change_thread_priority, get_current_thread, profiling::OsTick};
+use crate::profiling::OsTick;
 
 #[repr(u64)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, PartialOrd, Ord)]
@@ -132,8 +129,6 @@ unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
         OsTick::new(get_system_tick()),
     );
 
-    // Waits for texture acquire sync. Replace with bias logic. You will need to await 
-    // p_render_sync if you remove it.
     (SYNC_WAIT.unwrap_unchecked())(p_texture_sync, u64::MAX);
 
     crate::profiling::end_span(OsTick::new(get_system_tick()));
