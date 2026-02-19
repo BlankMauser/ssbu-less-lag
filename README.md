@@ -1,6 +1,6 @@
-# `ssbu-less-lag`
+# `ssbu-sync`
 
-This repo contains various implementations meant to reduce smash ultimates input delay. Tentatively it can reduce 3-4 frames of input delay depending on whether you're on emulator or console. Credit goes to blujay for their amazing work hacking up smash ultimates render logic!
+This repo contains various implementations meant to reduce smash ultimates input delay. Tentatively it can reduce 3-4 frames of input delay depending on whether you're on emulator or console. Credit for the original code goes to blujay for their amazing work hacking up smash ultimates render logic!
 
 Before reporting issues please read the following:
 
@@ -27,7 +27,7 @@ This crate can also be installed from another Cargo Skyline plugin.
 
 ```toml
 [dependencies]
-ssbusync = { git = "https://github.com/BlankMauser/ssbu-less-lag", default-features = false }
+ssbusync = { git = "https://github.com/BlankMauser/ssbu-sync", default-features = false }
 ```
 
 Installing hooks from your own `#[skyline::main]`:
@@ -38,5 +38,6 @@ cfg.disable_vsync = true;
 cfg.disable_pacer = false;
 ssbusync::install_ssbu_sync(cfg);
 ```
+
 
 
