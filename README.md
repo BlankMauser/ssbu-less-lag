@@ -1,6 +1,8 @@
 # `ssbu-less-lag`
 
-idk man 3 frames less input lag than ultimate or something
+This repo contains various implementations meant to reduce smash ultimates input delay. Tentatively it can reduce 3-4 frames of input delay depending on whether you're on emulator or console.
+
+Before reporting issues please read the following:
 
 ## Known Issues (WIPs)
 
@@ -36,3 +38,4 @@ cfg.disable_vsync = true;
 cfg.disable_pacer = false;
 ssbusync::install_ssbu_sync(cfg);
 ```
+
