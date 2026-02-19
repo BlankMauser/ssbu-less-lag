@@ -167,6 +167,9 @@ fn use_current_frame_index() {
     skyline::patching::Patch::in_text(0x386ab4c).nop().unwrap();
 }
 
+// FRAMES IN FLIGHT MANAGEMENT:
+// SSBU is triple buffered. Sets render target index to 2 past freshly acquired texture normally.
+// This patches it to +1 modulo 2 instead of +2. Change to modulo 3 for triple buffer.
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
@@ -185,6 +188,7 @@ fn patch_render_sync_wait() {
         .unwrap();
 }
 
+// Can be called at runtime. Sets to 2 = double buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_num_window_textures(ctx: &skyline::hooks::InlineCtx) {
     let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)

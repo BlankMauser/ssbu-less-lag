@@ -111,6 +111,7 @@ pub unsafe fn post_scene_update_submit_render(ctx: &InlineCtx) {
         0,
     );
 
+    // Task Worker list for all of bandai namco rendering.
     if fighter_worker_info[4] != 0 {
         let tls_slot = *(*TLS_SLOT_ARRAY_START
             .cast::<*const u8>()
@@ -131,6 +132,7 @@ pub unsafe fn post_scene_update_submit_render(ctx: &InlineCtx) {
     // let p_render_sync = *((p_gfx_device + 0x20) as *const u64);
     // let p_texture_sync = *((p_gfx_device + 0x28) as *const u64);
 
+    // Will need to await this for custom frame pacer logic.
     // (SYNC_WAIT.unwrap_unchecked())(p_render_sync, u64::MAX);
     // crate::profiling::end_span(OsTick::new(get_system_tick()));
 
@@ -168,6 +170,8 @@ fn prevent_task_worker_updating_models() {
 fn prevent_fighter_render_command_recording() {
     skyline::patching::Patch::in_text(0x374b554).nop().unwrap();
 }
+
+// TODO: Patch VFX
 
 pub fn install() {
     prevent_render_dispatch_signal();

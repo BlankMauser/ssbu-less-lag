@@ -32,6 +32,7 @@ fn runner_thread(ptr: u64) {
 
 static mut TOP: Option<Instant> = None;
 // 374b4d4
+// Deprecated scene manager hook 
 #[skyline::hook(offset = 0x374b290, inline)]
 pub unsafe fn run_scene_manager(ctx: &InlineCtx) {
     let ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)

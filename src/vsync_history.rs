@@ -132,6 +132,8 @@ unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
         OsTick::new(get_system_tick()),
     );
 
+    // Waits for texture acquire sync. Replace with bias logic. You will need to await 
+    // p_render_sync if you remove it.
     (SYNC_WAIT.unwrap_unchecked())(p_texture_sync, u64::MAX);
 
     crate::profiling::end_span(OsTick::new(get_system_tick()));

@@ -3,7 +3,7 @@ mod pacer;
 mod profiling;
 mod sequencing;
 mod swapchain;
-mod vsync;
+//mod vsync;
 mod vsync_history;
 
 const DISABLE_VSYNC: bool = true;
@@ -21,7 +21,7 @@ pub fn main() {
     vsync_history::install();
     swapchain::install(DISABLE_VSYNC);
     off_by_one::install();
-    pacer::install();
+    // pacer::install();
     // profiling::setup();
     // sequencing::install();
 
