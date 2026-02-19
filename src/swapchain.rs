@@ -125,9 +125,6 @@ unsafe fn flush_swap_buffers_before_present(ctx: &skyline::hooks::InlineCtx) {
  */
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
-    // call_original!(arg1, arg2);
-    // call_original!(arg1, arg2);
-    // call_original!(arg1, arg2);
     if *(arg1 as *const u8).add(0x1d18) != 0 {
         *(arg1 as *mut u8).add(0x1d30).cast::<u64>() =
             (!*(arg1 as *const u8).add(0x1d20).cast::<u32>() & 1) as u64;
@@ -143,6 +140,14 @@ unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
     // }
     // RUN_COUNT += 1;
     // // call_original!(arg1, arg2);
+}
+
+// Emulator is powerful enough to handle multiple flushes.
+#[skyline::hook(offset = 0x384f460)]
+unsafe fn emu_full_swapchain_flush(arg1: u64, arg2: u32) {
+    call_original!(arg1, arg2);
+    call_original!(arg1, arg2);
+    call_original!(arg1, arg2);
 }
 
 /** Prevents call to Swapchain::AwaitAndSubmitDispatches in the main loop
@@ -175,6 +180,11 @@ fn use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
 }
 
+#[skyline::hook(offset = 0x386ab4c, inline)]
+fn emu_use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
+    ctx.registers[9].set_x((ctx.registers[9].x()) % 2);
+}
+
 /** This disables a sync that is signaled by rendering wrapping up
  *
  * When vsync is disabled, this sync can prevent the start of the frame on the CPU from progressing,
@@ -198,18 +208,28 @@ unsafe fn set_num_window_textures(ctx: &skyline::hooks::InlineCtx) {
     func_ptr(*((ctx.registers[23].x() + 0x10) as *const u64), 2);
 }
 
-pub fn install(is_vsync_disabled: bool) {
-    // patch_swap_flush_call();
+pub fn install(is_vsync_disabled: bool, emulator: bool) {
+    if emulator{
+        patch_swap_flush_call();
+    }
     use_current_frame_index();
 
     // if is_vsync_disabled {
     patch_render_sync_wait();
     // }
 
+    if emulator {
     skyline::install_hooks!(
-        // flush_swap_buffers_before_present,
-        full_swapchain_flush,
-        use_next_frame_index,
+        flush_swap_buffers_before_present,
+        emu_full_swapchain_flush,
+        emu_use_next_frame_index,
         set_num_window_textures
     );
+    } else {
+        skyline::install_hooks!(
+            full_swapchain_flush,
+            use_next_frame_index,
+            set_num_window_textures
+        );
+    }
 }
