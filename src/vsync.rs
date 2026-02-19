@@ -23,13 +23,12 @@ unsafe fn calc_nnsdk_offset() -> u64 {
 
 #[skyline::hook(offset = 0x374c118, inline)]
 unsafe fn run_scene_update(_: &skyline::hooks::InlineCtx) {
-    // SAFETY: This is basically a local variable (again)
-    static mut CONTROLLER: ninput::Controller = ninput::Controller::new(0);
+    // // SAFETY: This is basically a local variable (again)
 
-    while !RUN.swap(false, Ordering::SeqCst) {
-        #[allow(static_mut_refs)]
-        CONTROLLER.update();
-    }
+    // while !RUN.swap(false, Ordering::SeqCst) {
+    //     #[allow(static_mut_refs)]
+    //     CONTROLLER.update();
+    // }
 }
 
 /** Patches nvnWindowBuilderSetPresentInterval/nvnWindowSetPresentInterval (I don't remember which one)

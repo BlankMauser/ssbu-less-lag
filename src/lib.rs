@@ -21,7 +21,7 @@ pub fn main() {
     vsync_history::install();
     swapchain::install(DISABLE_VSYNC);
     off_by_one::install();
-    pacer::install();
+    // pacer::install();
     // profiling::setup();
     // sequencing::install();
 
