@@ -16,3 +16,23 @@ Until these issues are fixed this reassures that this mod is best used AS A PRAC
 The USB stuff requires some more polish, but considering that it's a very small amount of the overall input delay removed (roughly 2.5-5ms average), I would rather release this mod in it's current state and continue working on the others when I have time.
 
 Thanks for understanding!
+
+## Library Usage
+
+This crate can also be installed from another Cargo Skyline plugin.
+
+`Cargo.toml` Example:
+
+```toml
+[dependencies]
+ssbusync = { git = "https://github.com/BlankMauser/ssbu-less-lag", default-features = false }
+```
+
+Installing hooks from your own `#[skyline::main]`:
+
+```rust
+let mut cfg = ssbusync::SsbuSyncConfig::default();
+cfg.disable_vsync = true;
+cfg.disable_pacer = false;
+ssbusync::install_ssbu_sync(cfg);
+```

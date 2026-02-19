@@ -1,3 +1,4 @@
+#![allow(warnings)]
 mod off_by_one;
 mod pacer;
 mod profiling;
@@ -6,7 +7,23 @@ mod swapchain;
 //mod vsync;
 mod vsync_history;
 
-const DISABLE_VSYNC: bool = true;
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct SsbuSyncConfig {
+    pub disable_vsync: bool,
+    pub disable_pacer: bool,
+    pub emulator_check: Option<bool>,
+}
+
+impl Default for SsbuSyncConfig {
+    fn default() -> Self {
+        Self {
+            disable_vsync: true,
+            disable_pacer: false,
+            emulator_check: None,
+        }
+    }
+}
 
 pub fn is_emulator() -> bool {
     unsafe {
@@ -29,20 +46,23 @@ unsafe extern "C" {
     pub fn change_thread_priority(thread: u64, prio: i32);
 }
 
-#[skyline::main(name = "ssbusync")]
-pub fn main() {
+pub fn install_ssbu_sync(config: SsbuSyncConfig) {
+    let emulator = config.emulator_check.unwrap_or_else(is_emulator);
+
     vsync_history::install();
-    swapchain::install(DISABLE_VSYNC, is_emulator());
+    swapchain::install(config.disable_vsync, emulator);
     off_by_one::install();
-    
-    if is_emulator(){
+
+    // Emulator always forces pacer-disable
+    if config.disable_pacer || emulator {
         pacer::install();
     }
-    // pacer::install();
+}
+
+#[cfg(feature = "nro-entry")]
+#[skyline::main(name = "ssbusync")]
+pub fn main() {
+    install_ssbu_sync(SsbuSyncConfig::default());
     // profiling::setup();
     // sequencing::install();
-
-    // if DISABLE_VSYNC {
-    //     vsync::install(true);
-    // }
 }
