@@ -29,7 +29,7 @@ unsafe extern "C" {
     pub fn change_thread_priority(thread: u64, prio: i32);
 }
 
-#[skyline::main(name = "immediate")]
+#[skyline::main(name = "ssbusync")]
 pub fn main() {
     vsync_history::install();
     swapchain::install(DISABLE_VSYNC, is_emulator());

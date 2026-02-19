@@ -3,6 +3,17 @@
 version = 4
 
 [[package]]
+name = "immediate"
+version = "0.1.0"
+dependencies = [
+ "paste",
+ "serde",
+ "serde_json",
+ "skyline",
+ "tracing",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -155,17 +166,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "testing"
-version = "0.1.0"
-dependencies = [
- "paste",
- "serde",
- "serde_json",
- "skyline",
- "tracing",
 ]
 
 [[package]]
