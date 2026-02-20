@@ -104,7 +104,6 @@ fn sleep_ms(ms: u32) {
 }
 
 // Hook-safe helper: defer symbol lookup until after the NRO callback unwinds.
-// This avoids recursive loader behavior when called directly inside an nro hook.
 pub fn spawn_disable_handshake(install_custom_ssbusync: fn()) {
     std::thread::spawn(move || {
         sleep_ms(POST_HOOK_LOOKUP_DELAY_MS);
@@ -119,6 +118,37 @@ pub fn spawn_disable_handshake(install_custom_ssbusync: fn()) {
     });
 }
 
+pub fn spawn_disable_handshake_unsafe_logged(
+    install_custom_ssbusync: unsafe fn(),
+    log: Option<fn(&'static str)>,
+) {
+    std::thread::spawn(move || {
+        sleep_ms(POST_HOOK_LOOKUP_DELAY_MS);
+
+        match try_disable_ssbusync() {
+            DisableResult::Disabled => {
+                let _ = wait_for_common();
+                if let Some(log) = log {
+                    log("ssbusync disabled: installing");
+                }
+                unsafe { install_custom_ssbusync() };
+            }
+            DisableResult::NotPresent => {
+                let _ = wait_for_common();
+                if let Some(log) = log {
+                    log("ssbusync not found: installing");
+                }
+                unsafe { install_custom_ssbusync() };
+            }
+            DisableResult::TooLate => {
+                if let Some(log) = log {
+                    log("could not disable ssbusync");
+                }
+            }
+        }
+    });
+}
+
 // Example use from another plugin:
 //
 // fn on_nro_load(info: &skyline::nro::NroInfo) {
@@ -126,5 +156,24 @@ pub fn spawn_disable_handshake(install_custom_ssbusync: fn()) {
 //         return;
 //     }
 //
-//     ssbusync::compatibility::spawn_disable_handshake(my_plugin_install_custom_ssbusync);
+//     ssbusync::compatibility::spawn_disable_handshake(plugin_install_custom_ssbusync);
+// }
+//
+// fn disable_ssbusync_hook(info: &skyline::nro::NroInfo) {
+//     if info.name != "common" {
+//         return;
+//     }
+//
+//     unsafe fn install_custom() {
+//         ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
+//     }
+//
+//     fn log_line(msg: &'static str) {
+//         println!("{msg}");
+//     }
+//
+//     ssbusync::compatibility::spawn_disable_handshake_unsafe_logged(
+//         install_custom,
+//         Some(log_line),
+//     );
 // }
