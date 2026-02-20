@@ -100,13 +100,6 @@ pub extern "C" fn ssbusync_is_enabled() -> u32 {
     ENABLED.load(Ordering::Acquire) as u32
 }
 
-pub fn set_enabled(enabled: bool) {
-    ssbusync_set_enabled(enabled as u32);
-}
-
-pub fn is_enabled() -> bool {
-    ENABLED.load(Ordering::Acquire)
-}
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
