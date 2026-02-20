@@ -262,13 +262,13 @@ fn install_buffer_impl(triple: bool) {
 pub unsafe fn enable_double_buffer() {
     install_buffer_impl(false);
     let _ = apply_double_window_textures_now();
-    patch_render_sync_wait();
+    //patch_render_sync_wait();
 }
 
 pub unsafe fn enable_triple_buffer() {
     install_buffer_impl(true);
     let _ = apply_triple_window_textures_now();
-    restore_render_sync_wait();
+    //restore_render_sync_wait();
 }
 
 // Runtime callable path: apply the current texture count if a window target has been seen.
@@ -286,6 +286,7 @@ pub unsafe fn apply_triple_window_textures_now() -> bool {
     if window_target == 0 {
         return false;
     }
+    //println("window found");
     set_window_textures_impl(window_target, 3);
     true
 }
