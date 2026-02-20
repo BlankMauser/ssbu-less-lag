@@ -69,12 +69,18 @@ pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
 // Returns 1 if now disabled, 0 if already installed and too late.
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_request_disable() -> u32 {
-    ENABLED.store(false, Ordering::Release);
-    DISABLER_REGISTERED.store(true, Ordering::Release);
+    // Legacy API path; keep behavior aligned with register_disabler.
     if INSTALLED.load(Ordering::Acquire) {
         println!("[ssbusync] request_disable too late (already installed)");
         0
+    } else if DISABLER_REGISTERED
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        println!("[ssbusync] request_disable rejected (another disabler already claimed)");
+        0
     } else {
+        ENABLED.store(false, Ordering::Release);
         println!("[ssbusync] request_disable accepted (will skip on common)");
         1
     }
@@ -84,12 +90,17 @@ pub extern "C" fn ssbusync_request_disable() -> u32 {
 // Returns 1 if accepted before install, 0 if already installed.
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_register_disabler() -> u32 {
-    DISABLER_REGISTERED.store(true, Ordering::Release);
-    ENABLED.store(false, Ordering::Release);
     if INSTALLED.load(Ordering::Acquire) {
         println!("[ssbusync] register_disabler too late (already installed)");
         0
+    } else if DISABLER_REGISTERED
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        println!("[ssbusync] register_disabler rejected (another disabler already claimed)");
+        0
     } else {
+        ENABLED.store(false, Ordering::Release);
         println!("[ssbusync] register_disabler accepted (will skip on common)");
         1
     }

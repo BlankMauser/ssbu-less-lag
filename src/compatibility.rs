@@ -1,4 +1,4 @@
-use core::sync::atomic::{AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use skyline::nn::ro;
 use skyline::nro::NroInfo;
 
@@ -109,6 +109,7 @@ impl OverrideState {
 pub static SSBUSYNC_SET_ENABLED_CACHE: ExportCache = ExportCache::new();
 pub static SSBUSYNC_REQUEST_DISABLE_CACHE: ExportCache = ExportCache::new();
 pub static SSBUSYNC_REGISTER_DISABLER_CACHE: ExportCache = ExportCache::new();
+pub static CUSTOM_INSTALL_CLAIMED: AtomicBool = AtomicBool::new(false);
 
 const SSBUSYNC_SET_ENABLED_SYM: &[u8] = b"ssbusync_set_enabled\0";
 const SSBUSYNC_REQUEST_DISABLE_SYM: &[u8] = b"ssbusync_request_disable\0";
@@ -137,7 +138,6 @@ unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
 // Resolves `sym_nul` directly from module image without nn::ro::Lookup* calls.
 // `sym_nul` must be null-terminated, e.g. b"ssbusync_set_enabled\0".
 pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
-    // Prefer RO's resolver first; it is robust to layout variations.
     let mut out = 0usize;
     if ro::LookupModuleSymbol(&mut out, module as *const ro::Module, sym_nul.as_ptr()) == 0 && out != 0 {
         return Some(out);
@@ -336,6 +336,23 @@ pub fn disable_ssbusync_if_cached() -> DisableResult {
     DisableResult::NotAvailable
 }
 
+// Attempts to claim ssbu sync install once.
+// Returns Disabled only for one disabler.
+pub unsafe fn try_claim_external_disabler() -> DisableResult {
+    let _ = try_cache_ssbusync_exports_global();
+    disable_ssbusync_if_cached()
+}
+
+// Returns true exactly once per process lifetime (or until reset_custom_install_claim()).
+pub fn claim_custom_install_once() -> bool {
+    !CUSTOM_INSTALL_CLAIMED.swap(true, Ordering::AcqRel)
+}
+
+// Optional for hot-reload/testing paths.
+pub fn reset_custom_install_claim() {
+    CUSTOM_INSTALL_CLAIMED.store(false, Ordering::Release);
+}
+
 // High-level hook helper with built-in logging for the three common cases:
 // 1) ssbusync exists, no disablers
 // 2) ssbusync exists, disabler called disable
@@ -408,6 +425,15 @@ pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideSt
     }
 }
 
+// Guarantees InstallCustom is emitted only once.
+pub unsafe fn observe_and_claim_override(info: &NroInfo, state: &mut OverrideState) -> OverrideAction {
+    let action = observe_and_decide_override(info, state);
+    if action == OverrideAction::InstallCustom && !claim_custom_install_once() {
+        return OverrideAction::None;
+    }
+    action
+}
+
 // Recommended disabler flow:
 //
 // 1) Register exactly one NRO load hook in your plugin startup.
@@ -422,28 +448,20 @@ pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideSt
 //
 // static mut OVERRIDE_STATE: ssbusync::compatibility::OverrideState =
 //     ssbusync::compatibility::OverrideState::new();
-// static mut CUSTOM_INSTALLED: bool = false;
 //
 // fn compat_init() {
-//     if ssbusync::compatibility::try_cache_ssbusync_exports_global() {
-//         let _ = ssbusync::compatibility::disable_ssbusync_if_cached();
-//     }
+//     let _ = unsafe { ssbusync::compatibility::try_claim_external_disabler() };
 //
 //     skyline::nro::add_hook(on_nro_load).expect("nro hook unavailable");
 // }
 //
 // fn on_nro_load(info: &skyline::nro::NroInfo) {
 //     let action = unsafe {
-//         ssbusync::compatibility::observe_and_decide_override(info, &mut OVERRIDE_STATE)
+//         ssbusync::compatibility::observe_and_claim_override(info, &mut OVERRIDE_STATE)
 //     };
 //
 //     if action == ssbusync::compatibility::OverrideAction::InstallCustom {
-//         unsafe {
-//             if !CUSTOM_INSTALLED {
-//                 CUSTOM_INSTALLED = true;
-//                 println!("[my-plugin] installing custom ssbusync path");
-//                 ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
-//             }
-//         }
+//         println!("[my-plugin] installing custom ssbusync path");
+//         unsafe { ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default()) };
 //     }
 // }
