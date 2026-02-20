@@ -1,312 +1,301 @@
-use core::{ffi::c_void, mem::MaybeUninit, ptr};
-use core::sync::atomic::{AtomicBool, Ordering};
-use skyline::libc;
-use skyline::nn::{
-    os::{self, SleepThread},
-    ro, TimeSpan,
-};
+use core::sync::atomic::{AtomicUsize, Ordering};
+use skyline::nn::ro;
 use skyline::nro::NroInfo;
 
-type U32Fn = extern "C" fn() -> u32;
-pub const VERY_LONG_TIMEOUT_MS: u32 = 15 * 60 * 1000;
-pub const POST_HOOK_LOOKUP_DELAY_MS: u32 = 10;
-const HANDSHAKE_STACK_ALIGN: usize = 0x1000; // page-aligned stack backing
-const HANDSHAKE_STACK_SIZE: usize = 0x10000; // 64 KiB
-const HANDSHAKE_THREAD_PRIO: i32 = 0x2C;
+type SetEnabledFn = extern "C" fn(u32);
 
-static HANDSHAKE_STARTED: AtomicBool = AtomicBool::new(false);
-static HANDSHAKE_FINISHED: AtomicBool = AtomicBool::new(false);
-static HANDSHAKE_EVENT_READY: AtomicBool = AtomicBool::new(false);
-static HANDSHAKE_TRIGGERED: AtomicBool = AtomicBool::new(false);
-static mut HANDSHAKE_THREAD: MaybeUninit<os::ThreadType> = MaybeUninit::uninit();
-static mut HANDSHAKE_EVENT: MaybeUninit<os::EventType> = MaybeUninit::uninit();
-static mut HANDSHAKE_STACK_PTR: *mut c_void = ptr::null_mut();
-static mut HANDSHAKE_INSTALL: Option<unsafe fn()> = None;
-static mut HANDSHAKE_LOG: Option<fn(&'static str)> = None;
+#[repr(C)]
+struct Mod0Header {
+    magic: [u8; 4],
+    dynamic_off: u32,
+    bss_start_off: u32,
+    bss_end_off: u32,
+    eh_frame_hdr_start_off: u32,
+    eh_frame_hdr_end_off: u32,
+    module_runtime_off: u32,
+}
+
+#[repr(C)]
+struct Elf64Dyn {
+    d_tag: i64,
+    d_val: u64,
+}
+
+#[repr(C)]
+struct Elf64Sym {
+    st_name: u32,
+    st_info: u8,
+    st_other: u8,
+    st_shndx: u16,
+    st_value: u64,
+    st_size: u64,
+}
+
+const DT_NULL: i64 = 0;
+const DT_HASH: i64 = 4;
+const DT_STRTAB: i64 = 5;
+const DT_SYMTAB: i64 = 6;
+const DT_STRSZ: i64 = 10;
+
+pub struct ExportCache {
+    addr: AtomicUsize,
+}
+
+impl ExportCache {
+    pub const fn new() -> Self {
+        Self {
+            addr: AtomicUsize::new(0),
+        }
+    }
+
+    pub fn get(&self) -> Option<usize> {
+        let addr = self.addr.load(Ordering::Acquire);
+        if addr == 0 {
+            None
+        } else {
+            Some(addr)
+        }
+    }
+
+    pub fn set(&self, addr: usize) {
+        if addr != 0 {
+            self.addr.store(addr, Ordering::Release);
+        }
+    }
+
+    pub fn clear(&self) {
+        self.addr.store(0, Ordering::Release);
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheStatus {
+    Ignored,
+    Cached,
+    Missing,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisableResult {
-    // ssbusync not found; proceed with custom install.
-    NotPresent,
-    // ssbusync disabled before install started; proceed with custom install.
     Disabled,
-    // ssbusync already installing; do not install another copy.
-    TooLate,
+    NotCached,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WaitResult {
-    // NROs loaded
-    CommonLoaded,
-    // SSBUSync Module not found
-    NotPresent,
-    TimedOut,
+pub enum OverrideAction {
+    None,
+    InstallCustom,
 }
 
-unsafe fn lookup_u32_fn(name: &'static [u8]) -> Option<U32Fn> {
-    let mut addr: usize = 0;
-    let rc = ro::LookupSymbol(&mut addr as *mut usize, name.as_ptr());
-    if rc == 0 && addr != 0 {
-        Some(core::mem::transmute(addr))
+pub struct OverrideState {
+    saw_ssbusync: bool,
+    did_disable: bool,
+    decided: bool,
+}
+
+impl OverrideState {
+    pub const fn new() -> Self {
+        Self {
+            saw_ssbusync: false,
+            did_disable: false,
+            decided: false,
+        }
+    }
+}
+
+pub static SSBUSYNC_SET_ENABLED_CACHE: ExportCache = ExportCache::new();
+
+unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
+    let mut i = 0usize;
+    loop {
+        if i >= wanted_nul.len() {
+            return false;
+        }
+
+        let a = *ptr.add(i);
+        let b = wanted_nul[i];
+        if a != b {
+            return false;
+        }
+        if b == 0 {
+            return true;
+        }
+
+        i += 1;
+    }
+}
+
+// Resolves `sym_nul` directly from module image without nn::ro::Lookup* calls.
+// `sym_nul` must be null-terminated, e.g. b"ssbusync_set_enabled\0".
+pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
+    let base = module.NroPtr as *const u8;
+    if base.is_null() {
+        return None;
+    }
+
+    let nro = &*(base as *const ro::NroHeader);
+    let mod0 = base.add(nro.mod_offset as usize) as *const Mod0Header;
+
+    if (*mod0).magic != *b"MOD0" {
+        return None;
+    }
+
+    let dyn_ptr = (mod0 as *const u8).add((*mod0).dynamic_off as usize) as *const Elf64Dyn;
+
+    let mut symtab: *const Elf64Sym = core::ptr::null();
+    let mut strtab: *const u8 = core::ptr::null();
+    let mut strsz: usize = 0;
+    let mut hash: *const u32 = core::ptr::null();
+
+    for i in 0..512usize {
+        let d = &*dyn_ptr.add(i);
+        if d.d_tag == DT_NULL {
+            break;
+        }
+
+        match d.d_tag {
+            DT_SYMTAB => symtab = base.add(d.d_val as usize) as *const Elf64Sym,
+            DT_STRTAB => strtab = base.add(d.d_val as usize),
+            DT_STRSZ => strsz = d.d_val as usize,
+            DT_HASH => hash = base.add(d.d_val as usize) as *const u32,
+            _ => {}
+        }
+    }
+
+    if symtab.is_null() || strtab.is_null() || hash.is_null() || strsz == 0 {
+        return None;
+    }
+
+    let nchain = *hash.add(1) as usize;
+    for i in 0..nchain {
+        let s = &*symtab.add(i);
+        let st_name = s.st_name as usize;
+        if st_name >= strsz {
+            continue;
+        }
+
+        if cstr_eq(strtab.add(st_name), sym_nul) {
+            let addr = (base as usize).wrapping_add(s.st_value as usize);
+            if addr != 0 {
+                return Some(addr);
+            }
+        }
+    }
+
+    None
+}
+
+pub fn observe_and_cache_export(
+    info: &NroInfo,
+    module_name: &str,
+    symbol_nul: &'static [u8],
+    cache: &ExportCache,
+) -> CacheStatus {
+    if info.name != module_name {
+        return CacheStatus::Ignored;
+    }
+
+    if cache.get().is_some() {
+        return CacheStatus::Cached;
+    }
+
+    let module = info.module as *const ro::Module;
+    let resolved = unsafe { resolve_export(&*module, symbol_nul) };
+
+    if let Some(addr) = resolved {
+        cache.set(addr);
+        CacheStatus::Cached
     } else {
-        None
+        CacheStatus::Missing
     }
 }
 
-pub fn try_disable_ssbusync() -> DisableResult {
-    unsafe {
-        let Some(request_disable) = lookup_u32_fn(b"ssbusync_request_disable\0") else {
-            return DisableResult::NotPresent;
-        };
-
-        if request_disable() != 0 {
-            DisableResult::Disabled
-        } else {
-            DisableResult::TooLate
-        }
-    }
+pub fn observe_ssbusync_set_enabled(info: &NroInfo) -> CacheStatus {
+    observe_and_cache_export(
+        info,
+        "ssbusync",
+        b"ssbusync_set_enabled\0",
+        &SSBUSYNC_SET_ENABLED_CACHE,
+    )
 }
 
-pub fn wait_for_common_with_timeout(timeout_ms: u32) -> WaitResult {
-    unsafe {
-        let Some(is_common_loaded) = lookup_u32_fn(b"ssbusync_is_common_loaded\0") else {
-            return WaitResult::NotPresent;
-        };
+pub fn call_cached_set_enabled(cache: &ExportCache, enabled: bool) -> bool {
+    let Some(addr) = cache.get() else {
+        return false;
+    };
 
-        if is_common_loaded() != 0 {
-            return WaitResult::CommonLoaded;
-        }
-
-        let mut waited_ms = 0;
-        while waited_ms < timeout_ms {
-            SleepThread(TimeSpan {
-                nanoseconds: 1_000_000, // 1ms
-            });
-            waited_ms += 1;
-            if is_common_loaded() != 0 {
-                return WaitResult::CommonLoaded;
-            }
-        }
-
-        WaitResult::TimedOut
-    }
-}
-
-pub fn wait_for_common_with_default_timeout() -> WaitResult {
-    wait_for_common_with_timeout(VERY_LONG_TIMEOUT_MS)
-}
-
-// No-timeout wait; preferred when "common" is expected to always load.
-pub fn wait_for_common() -> WaitResult {
-    unsafe {
-        let Some(is_common_loaded) = lookup_u32_fn(b"ssbusync_is_common_loaded\0") else {
-            return WaitResult::NotPresent;
-        };
-
-        while is_common_loaded() == 0 {
-            SleepThread(TimeSpan {
-                nanoseconds: 1_000_000, // 1ms
-            });
-        }
-
-        WaitResult::CommonLoaded
-    }
-}
-
-fn sleep_ms(ms: u32) {
-    for _ in 0..ms {
-        unsafe {
-            SleepThread(TimeSpan {
-                nanoseconds: 1_000_000, // 1ms
-            });
-        }
-    }
-}
-
-fn initialize_event_once() -> bool {
-    if HANDSHAKE_EVENT_READY.load(Ordering::Acquire) {
-        return true;
-    }
-
-    unsafe {
-        HANDSHAKE_EVENT.write(core::mem::zeroed());
-        os::InitializeEvent(
-            HANDSHAKE_EVENT.as_mut_ptr(),
-            false,
-            os::EventClearMode_EventClearMode_ManualClear,
-        );
-    }
-
-    HANDSHAKE_EVENT_READY.store(true, Ordering::Release);
+    let func: SetEnabledFn = unsafe { core::mem::transmute(addr) };
+    func(enabled as u32);
     true
 }
 
-pub fn notify_common_nro_load(info: &NroInfo) {
+pub fn disable_ssbusync_if_cached() -> DisableResult {
+    if call_cached_set_enabled(&SSBUSYNC_SET_ENABLED_CACHE, false) {
+        DisableResult::Disabled
+    } else {
+        DisableResult::NotCached
+    }
+}
+
+// High-level hook helper with built-in logging for the three common cases:
+// 1) ssbusync exists, no disablers
+// 2) ssbusync exists, disabler called disable
+// 3) ssbusync not present, custom install should proceed
+pub fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideState) -> OverrideAction {
+    if state.decided {
+        return OverrideAction::None;
+    }
+
+    if info.name == "ssbusync" {
+        state.saw_ssbusync = true;
+        match observe_ssbusync_set_enabled(info) {
+            CacheStatus::Cached => {
+                if disable_ssbusync_if_cached() == DisableResult::Disabled {
+                    state.did_disable = true;
+                    println!("[ssbusync-compat] ssbusync exists: disabled.");
+                }
+            }
+            CacheStatus::Missing => {
+                println!("[ssbusync-compat] ssbusync loaded, but ssbusync_set_enabled export missing.");
+            }
+            CacheStatus::Ignored => {}
+        }
+        return OverrideAction::None;
+    }
+
     if info.name != "common" {
-        return;
+        return OverrideAction::None;
     }
-    signal_common_loaded_event();
+
+    state.decided = true;
+    if state.saw_ssbusync {
+        if state.did_disable {
+            println!("[ssbusync-compat] ssbusync disabled -> install custom");
+            OverrideAction::InstallCustom
+        } else {
+            println!("[ssbusync-compat] no disablers -> ssbusync install");
+            OverrideAction::None
+        }
+    } else {
+        println!("[ssbusync-compat] ssbusync missing -> install custom");
+        OverrideAction::InstallCustom
+    }
 }
 
-pub fn signal_common_loaded_event() {
-    HANDSHAKE_TRIGGERED.store(true, Ordering::Release);
-    if HANDSHAKE_EVENT_READY.load(Ordering::Acquire) {
-        unsafe {
-            os::SignalEvent(HANDSHAKE_EVENT.as_mut_ptr());
-        }
-    }
-}
-
-extern "C" fn handshake_thread_main(_arg: *mut c_void) {
-    if !HANDSHAKE_TRIGGERED.load(Ordering::Acquire) {
-        unsafe {
-            os::WaitEvent(HANDSHAKE_EVENT.as_mut_ptr());
-        }
-    }
-    sleep_ms(POST_HOOK_LOOKUP_DELAY_MS);
-
-    let install = unsafe { HANDSHAKE_INSTALL };
-    let log = unsafe { HANDSHAKE_LOG };
-
-    match try_disable_ssbusync() {
-        DisableResult::Disabled => {
-            let _ = wait_for_common();
-            if let Some(log) = log {
-                log("ssbusync disabled: installing");
-            }
-            if let Some(install) = install {
-                unsafe { install() };
-            }
-        }
-        DisableResult::NotPresent => {
-            let _ = wait_for_common();
-            if let Some(log) = log {
-                log("ssbusync not found: installing");
-            }
-            if let Some(install) = install {
-                unsafe { install() };
-            }
-        }
-        DisableResult::TooLate => {
-            if let Some(log) = log {
-                log("could not disable ssbusync");
-            }
-        }
-    }
-
-    HANDSHAKE_FINISHED.store(true, Ordering::Release);
-}
-
-fn start_handshake_thread() -> bool {
-    if !initialize_event_once() {
-        return false;
-    }
-
-    if HANDSHAKE_STARTED
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        return false;
-    }
-
-    unsafe {
-        HANDSHAKE_THREAD.write(os::ThreadType::new());
-        let thread = HANDSHAKE_THREAD.as_mut_ptr();
-        HANDSHAKE_STACK_PTR = libc::memalign(HANDSHAKE_STACK_ALIGN, HANDSHAKE_STACK_SIZE);
-        if HANDSHAKE_STACK_PTR.is_null() {
-            HANDSHAKE_INSTALL = None;
-            HANDSHAKE_LOG = None;
-            HANDSHAKE_STARTED.store(false, Ordering::Release);
-            return false;
-        }
-
-        // CreateThread expects the base (lowest address) of the stack region.
-        let stack = HANDSHAKE_STACK_PTR as *mut u8;
-        let rc = os::CreateThread(
-            thread,
-            handshake_thread_main,
-            ptr::null_mut(),
-            stack,
-            HANDSHAKE_STACK_SIZE,
-            HANDSHAKE_THREAD_PRIO,
-        );
-
-        if rc != 0 {
-            libc::free(HANDSHAKE_STACK_PTR);
-            HANDSHAKE_STACK_PTR = ptr::null_mut();
-            HANDSHAKE_INSTALL = None;
-            HANDSHAKE_LOG = None;
-            HANDSHAKE_STARTED.store(false, Ordering::Release);
-            return false;
-        }
-
-        os::StartThread(thread);
-    }
-
-    true
-}
-
-pub fn cleanup_handshake_thread() -> bool {
-    if !HANDSHAKE_STARTED.load(Ordering::Acquire) || !HANDSHAKE_FINISHED.load(Ordering::Acquire) {
-        return false;
-    }
-
-    unsafe {
-        let thread = HANDSHAKE_THREAD.as_mut_ptr();
-        os::WaitThread(thread);
-        os::DestroyThread(thread);
-        if HANDSHAKE_EVENT_READY.load(Ordering::Acquire) {
-            os::ClearEvent(HANDSHAKE_EVENT.as_mut_ptr());
-        }
-        if !HANDSHAKE_STACK_PTR.is_null() {
-            libc::free(HANDSHAKE_STACK_PTR);
-            HANDSHAKE_STACK_PTR = ptr::null_mut();
-        }
-        HANDSHAKE_INSTALL = None;
-        HANDSHAKE_LOG = None;
-    }
-
-    HANDSHAKE_FINISHED.store(false, Ordering::Release);
-    HANDSHAKE_TRIGGERED.store(false, Ordering::Release);
-    HANDSHAKE_STARTED.store(false, Ordering::Release);
-    true
-}
-
-// Hook-safe helper: defer symbol lookup until after the NRO callback unwinds.
-pub fn spawn_disable_handshake(
-    install: unsafe fn(),
-    log: Option<fn(&'static str)>,
-) {
-    let _ = cleanup_handshake_thread();
-    unsafe {
-        HANDSHAKE_INSTALL = Some(install);
-        HANDSHAKE_LOG = log;
-    }
-    let _ = start_handshake_thread();
-}
-
-// Example use from another plugin:
+// Example (threadless, NRO-hook driven, covers all 3 combinations):
+//
+// static mut OVERRIDE_STATE: ssbusync::compatibility::OverrideState =
+//     ssbusync::compatibility::OverrideState::new();
 //
 // fn on_nro_load(info: &skyline::nro::NroInfo) {
-//     if info.name != "common" {
-//         return;
+//     let action = unsafe {
+//         ssbusync::compatibility::observe_and_decide_override(info, &mut OVERRIDE_STATE)
+//     };
+//
+//     if action == ssbusync::compatibility::OverrideAction::InstallCustom {
+//         println!("[my-plugin] installing custom ssbusync path");
+//         unsafe {
+//             ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
+//         }
 //     }
-//
-//     // Hook path only signals event; no LookupSymbol work here.
-//     ssbusync::compatibility::notify_common_nro_load(info);
-// }
-//
-// fn plugin_startup() {
-//     unsafe fn install() {
-//         ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
-//     }
-//
-//     fn log_line(msg: &'static str) {
-//         println!("{msg}");
-//     }
-//
-//     ssbusync::compatibility::spawn_disable_handshake(
-//         install,
-//         Some(log_line),
-//     );
 // }
