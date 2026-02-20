@@ -1,11 +1,8 @@
 use crate::sequencing;
 use super::*;
-use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
-// 0 = none, 2 = double, 3 = triple. If set before WINDOW_TARGET is known,
-// it will be applied on the next hooked call that provides context.
-static PENDING_WINDOW_COUNT: AtomicU8 = AtomicU8::new(0);
 
 #[inline(always)]
 unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
@@ -20,10 +17,6 @@ unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
 unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
     WINDOW_TARGET.store(window_target, Ordering::Release);
-    let pending = PENDING_WINDOW_COUNT.swap(0, Ordering::AcqRel);
-    if pending == 2 || pending == 3 {
-        set_window_textures_impl(window_target, pending as i32);
-    }
     window_target
 }
 
@@ -201,7 +194,7 @@ fn use_current_frame_index() {
 
 // FRAMES IN FLIGHT MANAGEMENT:
 // SSBU is triple buffered. Sets render target index to 2 past freshly acquired texture normally.
-// This patches it to +1 modulo 2 instead of +2 Modulo 3.
+// This patches it to +1 modulo 2 instead of +2.
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
@@ -209,7 +202,7 @@ fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
+    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 3);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
@@ -227,6 +220,14 @@ fn emu_use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
 fn patch_render_sync_wait() {
     skyline::patching::Patch::in_text(0x386fcec)
         .data(0xD2800000u32)
+        .unwrap();
+}
+
+fn restore_render_sync_wait() {
+    // Original instruction at 0x386fcec:
+    //   00 01 3f d6  =>  blr x8
+    skyline::patching::Patch::in_text(0x386fcec)
+        .data(0xD63F0100u32)
         .unwrap();
 }
 
@@ -272,24 +273,18 @@ pub unsafe fn enable_triple_buffer() {
 pub unsafe fn apply_double_window_textures_now() -> bool {
     let window_target = WINDOW_TARGET.load(Ordering::Acquire);
     if window_target == 0 {
-        // Queue request and let next hooked call apply it as soon as context is available.
-        PENDING_WINDOW_COUNT.store(2, Ordering::Release);
         return false;
     }
     set_window_textures_impl(window_target, 2);
-    PENDING_WINDOW_COUNT.store(0, Ordering::Release);
     true
 }
 
 pub unsafe fn apply_triple_window_textures_now() -> bool {
     let window_target = WINDOW_TARGET.load(Ordering::Acquire);
     if window_target == 0 {
-        // Queue request and let next hooked call apply it as soon as context is available.
-        PENDING_WINDOW_COUNT.store(3, Ordering::Release);
         return false;
     }
     set_window_textures_impl(window_target, 3);
-    PENDING_WINDOW_COUNT.store(0, Ordering::Release);
     true
 }
 
@@ -301,9 +296,9 @@ pub fn install(config: SsbuSyncConfig) {
     }
     use_current_frame_index();
 
-    // if is_vsync_disabled {
-    patch_render_sync_wait();
-    // }
+    if config.disable_vsync {
+        patch_render_sync_wait();
+    }
 
     if emulator {
     skyline::install_hooks!(
