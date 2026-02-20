@@ -135,10 +135,12 @@ unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
     }
 }
 
-// Resolves `sym_nul` directly from module image without nn::ro::Lookup* calls.
-// `sym_nul` must be null-terminated, e.g. b"ssbusync_set_enabled\0".
-pub unsafe fn resolve_export_no_ro(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
-
+pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
+    let mut out = 0usize;
+    if ro::LookupModuleSymbol(&mut out, module as *const ro::Module, sym_nul.as_ptr()) == 0 && out != 0 {
+        return Some(out);
+    }
+    
     let base = module.NroPtr as *const u8;
     if base.is_null() {
         return None;
@@ -214,7 +216,7 @@ pub unsafe fn observe_and_cache_export(
     }
 
     let module = info.module as *const ro::Module;
-    let resolved = unsafe { resolve_export_no_ro(&*module, symbol_nul) };
+    let resolved = unsafe { resolve_export(&*module, symbol_nul) };
 
     if let Some(addr) = resolved {
         cache.set(addr);

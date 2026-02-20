@@ -4,6 +4,28 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
 
+/// Returns the cached NVN window pointer (0 if not yet seen).
+pub(crate) fn window_target() -> u64 {
+    WINDOW_TARGET.load(Ordering::Acquire)
+}
+
+/// Returns the function pointer for `nvnWindowGetNumActiveTextures`.
+/// Resolved from the game's text section.
+pub(crate) unsafe fn get_window_num_active_textures_fn() -> unsafe extern "C" fn(*const ()) -> i32 {
+    // nvnWindowGetNumActiveTextures is at a known vtable offset.
+    // We use the same text-relative resolution pattern as set_window_textures_impl.
+    // The function is stored in the NVN proc table; for now we resolve it the
+    // same way the rest of the swapchain code does: via a text-section pointer.
+    //
+    // Offset 0x593fba0 = nvnWindowGetNumActiveTextures
+    // (0x593fb80 is nvnWindowSetNumActiveTextures, +0x20 = Get variant based on
+    //  vtable ordering: Set at slot N, Get at slot N+4 → 4*8=0x20 apart)
+    *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fba0)
+        .cast::<unsafe extern "C" fn(*const ()) -> i32>()
+}
+
 #[inline(always)]
 unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
     let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
@@ -314,4 +336,12 @@ pub fn install(config: SsbuSyncConfig) {
         skyline::install_hook!(full_swapchain_flush);
         install_buffer_impl(config.enable_triple_buffer);
     }
+
+    // Seed the render API with the initial buffer mode.
+    let initial = if config.enable_triple_buffer {
+        crate::render::api::BufferMode::Triple
+    } else {
+        crate::render::api::BufferMode::Double
+    };
+    crate::render::api::set_initial_mode(initial);
 }
