@@ -1,8 +1,11 @@
 use crate::sequencing;
 use super::*;
-use core::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
+// 0 = none, 2 = double, 3 = triple. If set before WINDOW_TARGET is known,
+// it will be applied on the next hooked call that provides context.
+static PENDING_WINDOW_COUNT: AtomicU8 = AtomicU8::new(0);
 
 #[inline(always)]
 unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
@@ -17,6 +20,10 @@ unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
 unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
     WINDOW_TARGET.store(window_target, Ordering::Release);
+    let pending = PENDING_WINDOW_COUNT.swap(0, Ordering::AcqRel);
+    if pending == 2 || pending == 3 {
+        set_window_textures_impl(window_target, pending as i32);
+    }
     window_target
 }
 
@@ -265,18 +272,24 @@ pub unsafe fn enable_triple_buffer() {
 pub unsafe fn apply_double_window_textures_now() -> bool {
     let window_target = WINDOW_TARGET.load(Ordering::Acquire);
     if window_target == 0 {
+        // Queue request and let next hooked call apply it as soon as context is available.
+        PENDING_WINDOW_COUNT.store(2, Ordering::Release);
         return false;
     }
     set_window_textures_impl(window_target, 2);
+    PENDING_WINDOW_COUNT.store(0, Ordering::Release);
     true
 }
 
 pub unsafe fn apply_triple_window_textures_now() -> bool {
     let window_target = WINDOW_TARGET.load(Ordering::Acquire);
     if window_target == 0 {
+        // Queue request and let next hooked call apply it as soon as context is available.
+        PENDING_WINDOW_COUNT.store(3, Ordering::Release);
         return false;
     }
     set_window_textures_impl(window_target, 3);
+    PENDING_WINDOW_COUNT.store(0, Ordering::Release);
     true
 }
 
