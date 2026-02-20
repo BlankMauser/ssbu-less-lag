@@ -202,7 +202,7 @@ fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
+    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 2);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
