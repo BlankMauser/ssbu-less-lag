@@ -1,0 +1,605 @@
+Base Address of .text: 7100000000
+
+Address of symbol loading function? 71037f7bd0
+
+void FUN_71037f7bd0(undefined8 param_1,code *param_2)
+
+{
+  nvnDeviceBuilderSetDefaults = (*param_2)(param_1,"nvnDeviceBuilderSetDefaults");
+  nvnDeviceBuilderSetFlags = (*param_2)(param_1,"nvnDeviceBuilderSetFlags");
+  nvnDeviceBuilderGetFlags = (*param_2)(param_1,"nvnDeviceBuilderGetFlags");
+  nvnDeviceInitialize = (*param_2)(param_1,"nvnDeviceInitialize");
+  nvnDeviceFinalize = (*param_2)(param_1,"nvnDeviceFinalize");
+  nvnDeviceSetDebugLabel = (*param_2)(param_1,"nvnDeviceSetDebugLabel");
+  nvnDeviceGetProcAddress = (*param_2)(param_1,"nvnDeviceGetProcAddress");
+  nvnDeviceGetInteger = (*param_2)(param_1,"nvnDeviceGetInteger");
+  nvnDeviceGetCurrentTimestampInNanoseconds =
+       (*param_2)(param_1,"nvnDeviceGetCurrentTimestampInNanoseconds");
+  nvnDeviceSetIntermediateShaderCache = (*param_2)(param_1,"nvnDeviceSetIntermediateShaderCache");
+  nvnDeviceGetTextureHandle = (*param_2)(param_1,"nvnDeviceGetTextureHandle");
+  nvnDeviceGetTexelFetchHandle = (*param_2)(param_1,"nvnDeviceGetTexelFetchHandle");
+  nvnDeviceGetImageHandle = (*param_2)(param_1,"nvnDeviceGetImageHandle");
+  nvnDeviceInstallDebugCallback = (*param_2)(param_1,"nvnDeviceInstallDebugCallback");
+  nvnDeviceGenerateDebugDomainId = (*param_2)(param_1,"nvnDeviceGenerateDebugDomainId");
+  nvnDeviceSetWindowOriginMode = (*param_2)(param_1,"nvnDeviceSetWindowOriginMode");
+  nvnDeviceSetDepthMode = (*param_2)(param_1,"nvnDeviceSetDepthMode");
+  nvnDeviceRegisterFastClearColor = (*param_2)(param_1,"nvnDeviceRegisterFastClearColor");
+  nvnDeviceRegisterFastClearColori = (*param_2)(param_1,"nvnDeviceRegisterFastClearColori");
+  nvnDeviceRegisterFastClearColorui = (*param_2)(param_1,"nvnDeviceRegisterFastClearColorui");
+  nvnDeviceRegisterFastClearDepth = (*param_2)(param_1,"nvnDeviceRegisterFastClearDepth");
+  nvnDeviceGetWindowOriginMode = (*param_2)(param_1,"nvnDeviceGetWindowOriginMode");
+  nvnDeviceGetDepthMode = (*param_2)(param_1,"nvnDeviceGetDepthMode");
+  nvnDeviceGetTimestampInNanoseconds = (*param_2)(param_1,"nvnDeviceGetTimestampInNanoseconds");
+  nvnDeviceApplyDeferredFinalizes = (*param_2)(param_1,"nvnDeviceApplyDeferredFinalizes");
+  nvnDeviceFinalizeCommandHandle = (*param_2)(param_1,"nvnDeviceFinalizeCommandHandle");
+  nvnDeviceWalkDebugDatabase = (*param_2)(param_1,"nvnDeviceWalkDebugDatabase");
+  nvnDeviceGetSeparateTextureHandle = (*param_2)(param_1,"nvnDeviceGetSeparateTextureHandle");
+  nvnDeviceGetSeparateSamplerHandle = (*param_2)(param_1,"nvnDeviceGetSeparateSamplerHandle");
+  nvnDeviceIsExternalDebuggerAttached = (*param_2)(param_1,"nvnDeviceIsExternalDebuggerAttached");
+  nvnQueueGetError = (*param_2)(param_1,"nvnQueueGetError");
+  nvnQueueGetTotalCommandMemoryUsed = (*param_2)(param_1,"nvnQueueGetTotalCommandMemoryUsed");
+  nvnQueueGetTotalControlMemoryUsed = (*param_2)(param_1,"nvnQueueGetTotalControlMemoryUsed");
+  nvnQueueGetTotalComputeMemoryUsed = (*param_2)(param_1,"nvnQueueGetTotalComputeMemoryUsed");
+  nvnQueueResetMemoryUsageCounts = (*param_2)(param_1,"nvnQueueResetMemoryUsageCounts");
+  nvnQueueBuilderSetDevice = (*param_2)(param_1,"nvnQueueBuilderSetDevice");
+  nvnQueueBuilderSetDefaults = (*param_2)(param_1,"nvnQueueBuilderSetDefaults");
+  nvnQueueBuilderSetFlags = (*param_2)(param_1,"nvnQueueBuilderSetFlags");
+  nvnQueueBuilderSetCommandMemorySize = (*param_2)(param_1,"nvnQueueBuilderSetCommandMemorySize");
+  nvnQueueBuilderSetComputeMemorySize = (*param_2)(param_1,"nvnQueueBuilderSetComputeMemorySize");
+  nvnQueueBuilderSetControlMemorySize = (*param_2)(param_1,"nvnQueueBuilderSetControlMemorySize");
+  nvnQueueBuilderGetQueueMemorySize = (*param_2)(param_1,"nvnQueueBuilderGetQueueMemorySize");
+  nvnQueueBuilderSetQueueMemory = (*param_2)(param_1,"nvnQueueBuilderSetQueueMemory");
+  nvnQueueBuilderSetCommandFlushThreshold =
+       (*param_2)(param_1,"nvnQueueBuilderSetCommandFlushThreshold");
+  nvnQueueBuilderSetQueuePriority = (*param_2)(param_1,"nvnQueueBuilderSetQueuePriority");
+  nvnQueueBuilderGetQueuePriority = (*param_2)(param_1,"nvnQueueBuilderGetQueuePriority");
+  nvnQueueBuilderGetDevice = (*param_2)(param_1,"nvnQueueBuilderGetDevice");
+  nvnQueueBuilderGetFlags = (*param_2)(param_1,"nvnQueueBuilderGetFlags");
+  nvnQueueBuilderGetCommandMemorySize = (*param_2)(param_1,"nvnQueueBuilderGetCommandMemorySize");
+  nvnQueueBuilderGetComputeMemorySize = (*param_2)(param_1,"nvnQueueBuilderGetComputeMemorySize");
+  nvnQueueBuilderGetControlMemorySize = (*param_2)(param_1,"nvnQueueBuilderGetControlMemorySize");
+  nvnQueueBuilderGetCommandFlushThreshold =
+       (*param_2)(param_1,"nvnQueueBuilderGetCommandFlushThreshold");
+  nvnQueueBuilderGetMemorySize = (*param_2)(param_1,"nvnQueueBuilderGetMemorySize");
+  nvnQueueBuilderGetMemory = (*param_2)(param_1,"nvnQueueBuilderGetMemory");
+  nvnQueueInitialize = (*param_2)(param_1,"nvnQueueInitialize");
+  nvnQueueFinalize = (*param_2)(param_1,"nvnQueueFinalize");
+  nvnQueueSetDebugLabel = (*param_2)(param_1,"nvnQueueSetDebugLabel");
+  nvnQueueSubmitCommands = (*param_2)(param_1,"nvnQueueSubmitCommands");
+  nvnQueueFlush = (*param_2)(param_1,"nvnQueueFlush");
+  nvnQueueFinish = (*param_2)(param_1,"nvnQueueFinish");
+  nvnQueuePresentTexture = (*param_2)(param_1,"nvnQueuePresentTexture");
+  nvnQueueAcquireTexture = (*param_2)(param_1,"nvnQueueAcquireTexture");
+  nvnWindowBuilderSetDevice = (*param_2)(param_1,"nvnWindowBuilderSetDevice");
+  nvnWindowBuilderSetDefaults = (*param_2)(param_1,"nvnWindowBuilderSetDefaults");
+  nvnWindowBuilderSetNativeWindow = (*param_2)(param_1,"nvnWindowBuilderSetNativeWindow");
+  nvnWindowBuilderSetTextures = (*param_2)(param_1,"nvnWindowBuilderSetTextures");
+  nvnWindowBuilderSetPresentInterval = (*param_2)(param_1,"nvnWindowBuilderSetPresentInterval");
+  nvnWindowBuilderSetNumActiveTextures = (*param_2)(param_1,"nvnWindowBuilderSetNumActiveTextures");
+  nvnWindowBuilderGetDevice = (*param_2)(param_1,"nvnWindowBuilderGetDevice");
+  nvnWindowBuilderGetNumTextures = (*param_2)(param_1,"nvnWindowBuilderGetNumTextures");
+  nvnWindowBuilderGetTexture = (*param_2)(param_1,"nvnWindowBuilderGetTexture");
+  nvnWindowBuilderGetNativeWindow = (*param_2)(param_1,"nvnWindowBuilderGetNativeWindow");
+  nvnWindowBuilderGetPresentInterval = (*param_2)(param_1,"nvnWindowBuilderGetPresentInterval");
+  nvnWindowBuilderGetNumActiveTextures = (*param_2)(param_1,"nvnWindowBuilderGetNumActiveTextures");
+  nvnWindowInitialize = (*param_2)(param_1,"nvnWindowInitialize");
+  nvnWindowFinalize = (*param_2)(param_1,"nvnWindowFinalize");
+  nvnWindowSetDebugLabel = (*param_2)(param_1,"nvnWindowSetDebugLabel");
+  nvnWindowAcquireTexture = (*param_2)(param_1,"nvnWindowAcquireTexture");
+  nvnWindowGetNativeWindow = (*param_2)(param_1,"nvnWindowGetNativeWindow");
+  nvnWindowGetPresentInterval = (*param_2)(param_1,"nvnWindowGetPresentInterval");
+  nvnWindowSetPresentInterval = (*param_2)(param_1,"nvnWindowSetPresentInterval");
+  nvnWindowSetCrop = (*param_2)(param_1,"nvnWindowSetCrop");
+  nvnWindowGetCrop = (*param_2)(param_1,"nvnWindowGetCrop");
+  nvnWindowSetNumActiveTextures = (*param_2)(param_1,"nvnWindowSetNumActiveTextures");
+  nvnWindowGetNumActiveTextures = (*param_2)(param_1,"nvnWindowGetNumActiveTextures");
+  nvnWindowGetNumTextures = (*param_2)(param_1,"nvnWindowGetNumTextures");
+  nvnProgramInitialize = (*param_2)(param_1,"nvnProgramInitialize");
+  nvnProgramFinalize = (*param_2)(param_1,"nvnProgramFinalize");
+  nvnProgramSetDebugLabel = (*param_2)(param_1,"nvnProgramSetDebugLabel");
+  nvnProgramSetShaders = (*param_2)(param_1,"nvnProgramSetShaders");
+  nvnProgramSetShadersExt = (*param_2)(param_1,"nvnProgramSetShadersExt");
+  nvnProgramSetSampleShading = (*param_2)(param_1,"nvnProgramSetSampleShading");
+  nvnMemoryPoolBuilderSetDevice = (*param_2)(param_1,"nvnMemoryPoolBuilderSetDevice");
+  nvnMemoryPoolBuilderSetDefaults = (*param_2)(param_1,"nvnMemoryPoolBuilderSetDefaults");
+  nvnMemoryPoolBuilderSetStorage = (*param_2)(param_1,"nvnMemoryPoolBuilderSetStorage");
+  nvnMemoryPoolBuilderSetFlags = (*param_2)(param_1,"nvnMemoryPoolBuilderSetFlags");
+  nvnMemoryPoolBuilderGetDevice = (*param_2)(param_1,"nvnMemoryPoolBuilderGetDevice");
+  nvnMemoryPoolBuilderGetMemory = (*param_2)(param_1,"nvnMemoryPoolBuilderGetMemory");
+  nvnMemoryPoolBuilderGetSize = (*param_2)(param_1,"nvnMemoryPoolBuilderGetSize");
+  nvnMemoryPoolBuilderGetFlags = (*param_2)(param_1,"nvnMemoryPoolBuilderGetFlags");
+  nvnMemoryPoolInitialize = (*param_2)(param_1,"nvnMemoryPoolInitialize");
+  nvnMemoryPoolSetDebugLabel = (*param_2)(param_1,"nvnMemoryPoolSetDebugLabel");
+  nvnMemoryPoolFinalize = (*param_2)(param_1,"nvnMemoryPoolFinalize");
+  nvnMemoryPoolMap = (*param_2)(param_1,"nvnMemoryPoolMap");
+  nvnMemoryPoolFlushMappedRange = (*param_2)(param_1,"nvnMemoryPoolFlushMappedRange");
+  nvnMemoryPoolInvalidateMappedRange = (*param_2)(param_1,"nvnMemoryPoolInvalidateMappedRange");
+  nvnMemoryPoolGetBufferAddress = (*param_2)(param_1,"nvnMemoryPoolGetBufferAddress");
+  nvnMemoryPoolMapVirtual = (*param_2)(param_1,"nvnMemoryPoolMapVirtual");
+  nvnMemoryPoolGetSize = (*param_2)(param_1,"nvnMemoryPoolGetSize");
+  nvnMemoryPoolGetFlags = (*param_2)(param_1,"nvnMemoryPoolGetFlags");
+  nvnTexturePoolInitialize = (*param_2)(param_1,"nvnTexturePoolInitialize");
+  nvnTexturePoolSetDebugLabel = (*param_2)(param_1,"nvnTexturePoolSetDebugLabel");
+  nvnTexturePoolFinalize = (*param_2)(param_1,"nvnTexturePoolFinalize");
+  nvnTexturePoolRegisterTexture = (*param_2)(param_1,"nvnTexturePoolRegisterTexture");
+  nvnTexturePoolRegisterImage = (*param_2)(param_1,"nvnTexturePoolRegisterImage");
+  nvnTexturePoolGetMemoryPool = (*param_2)(param_1,"nvnTexturePoolGetMemoryPool");
+  nvnTexturePoolGetMemoryOffset = (*param_2)(param_1,"nvnTexturePoolGetMemoryOffset");
+  nvnTexturePoolGetSize = (*param_2)(param_1,"nvnTexturePoolGetSize");
+  nvnSamplerPoolInitialize = (*param_2)(param_1,"nvnSamplerPoolInitialize");
+  nvnSamplerPoolSetDebugLabel = (*param_2)(param_1,"nvnSamplerPoolSetDebugLabel");
+  nvnSamplerPoolFinalize = (*param_2)(param_1,"nvnSamplerPoolFinalize");
+  nvnSamplerPoolRegisterSampler = (*param_2)(param_1,"nvnSamplerPoolRegisterSampler");
+  nvnSamplerPoolRegisterSamplerBuilder = (*param_2)(param_1,"nvnSamplerPoolRegisterSamplerBuilder");
+  nvnSamplerPoolGetMemoryPool = (*param_2)(param_1,"nvnSamplerPoolGetMemoryPool");
+  nvnSamplerPoolGetMemoryOffset = (*param_2)(param_1,"nvnSamplerPoolGetMemoryOffset");
+  nvnSamplerPoolGetSize = (*param_2)(param_1,"nvnSamplerPoolGetSize");
+  nvnBufferBuilderSetDevice = (*param_2)(param_1,"nvnBufferBuilderSetDevice");
+  nvnBufferBuilderSetDefaults = (*param_2)(param_1,"nvnBufferBuilderSetDefaults");
+  nvnBufferBuilderSetStorage = (*param_2)(param_1,"nvnBufferBuilderSetStorage");
+  nvnBufferBuilderGetDevice = (*param_2)(param_1,"nvnBufferBuilderGetDevice");
+  nvnBufferBuilderGetMemoryPool = (*param_2)(param_1,"nvnBufferBuilderGetMemoryPool");
+  nvnBufferBuilderGetMemoryOffset = (*param_2)(param_1,"nvnBufferBuilderGetMemoryOffset");
+  nvnBufferBuilderGetSize = (*param_2)(param_1,"nvnBufferBuilderGetSize");
+  nvnBufferInitialize = (*param_2)(param_1,"nvnBufferInitialize");
+  nvnBufferSetDebugLabel = (*param_2)(param_1,"nvnBufferSetDebugLabel");
+  nvnBufferFinalize = (*param_2)(param_1,"nvnBufferFinalize");
+  nvnBufferMap = (*param_2)(param_1,"nvnBufferMap");
+  nvnBufferGetAddress = (*param_2)(param_1,"nvnBufferGetAddress");
+  nvnBufferFlushMappedRange = (*param_2)(param_1,"nvnBufferFlushMappedRange");
+  nvnBufferInvalidateMappedRange = (*param_2)(param_1,"nvnBufferInvalidateMappedRange");
+  nvnBufferGetMemoryPool = (*param_2)(param_1,"nvnBufferGetMemoryPool");
+  nvnBufferGetMemoryOffset = (*param_2)(param_1,"nvnBufferGetMemoryOffset");
+  nvnBufferGetSize = (*param_2)(param_1,"nvnBufferGetSize");
+  nvnBufferGetDebugID = (*param_2)(param_1,"nvnBufferGetDebugID");
+  nvnTextureBuilderSetDevice = (*param_2)(param_1,"nvnTextureBuilderSetDevice");
+  nvnTextureBuilderSetDefaults = (*param_2)(param_1,"nvnTextureBuilderSetDefaults");
+  nvnTextureBuilderSetFlags = (*param_2)(param_1,"nvnTextureBuilderSetFlags");
+  nvnTextureBuilderSetTarget = (*param_2)(param_1,"nvnTextureBuilderSetTarget");
+  nvnTextureBuilderSetWidth = (*param_2)(param_1,"nvnTextureBuilderSetWidth");
+  nvnTextureBuilderSetHeight = (*param_2)(param_1,"nvnTextureBuilderSetHeight");
+  nvnTextureBuilderSetDepth = (*param_2)(param_1,"nvnTextureBuilderSetDepth");
+  nvnTextureBuilderSetSize1D = (*param_2)(param_1,"nvnTextureBuilderSetSize1D");
+  nvnTextureBuilderSetSize2D = (*param_2)(param_1,"nvnTextureBuilderSetSize2D");
+  nvnTextureBuilderSetSize3D = (*param_2)(param_1,"nvnTextureBuilderSetSize3D");
+  nvnTextureBuilderSetLevels = (*param_2)(param_1,"nvnTextureBuilderSetLevels");
+  nvnTextureBuilderSetFormat = (*param_2)(param_1,"nvnTextureBuilderSetFormat");
+  nvnTextureBuilderSetSamples = (*param_2)(param_1,"nvnTextureBuilderSetSamples");
+  nvnTextureBuilderSetSwizzle = (*param_2)(param_1,"nvnTextureBuilderSetSwizzle");
+  nvnTextureBuilderSetDepthStencilMode = (*param_2)(param_1,"nvnTextureBuilderSetDepthStencilMode");
+  nvnTextureBuilderGetStorageSize = (*param_2)(param_1,"nvnTextureBuilderGetStorageSize");
+  nvnTextureBuilderGetStorageAlignment = (*param_2)(param_1,"nvnTextureBuilderGetStorageAlignment");
+  nvnTextureBuilderSetStorage = (*param_2)(param_1,"nvnTextureBuilderSetStorage");
+  nvnTextureBuilderSetPackagedTextureData =
+       (*param_2)(param_1,"nvnTextureBuilderSetPackagedTextureData");
+  nvnTextureBuilderSetPackagedTextureLayout =
+       (*param_2)(param_1,"nvnTextureBuilderSetPackagedTextureLayout");
+  nvnTextureBuilderSetStride = (*param_2)(param_1,"nvnTextureBuilderSetStride");
+  nvnTextureBuilderSetGLTextureName = (*param_2)(param_1,"nvnTextureBuilderSetGLTextureName");
+  nvnTextureBuilderGetStorageClass = (*param_2)(param_1,"nvnTextureBuilderGetStorageClass");
+  nvnTextureBuilderGetDevice = (*param_2)(param_1,"nvnTextureBuilderGetDevice");
+  nvnTextureBuilderGetFlags = (*param_2)(param_1,"nvnTextureBuilderGetFlags");
+  nvnTextureBuilderGetTarget = (*param_2)(param_1,"nvnTextureBuilderGetTarget");
+  nvnTextureBuilderGetWidth = (*param_2)(param_1,"nvnTextureBuilderGetWidth");
+  nvnTextureBuilderGetHeight = (*param_2)(param_1,"nvnTextureBuilderGetHeight");
+  nvnTextureBuilderGetDepth = (*param_2)(param_1,"nvnTextureBuilderGetDepth");
+  nvnTextureBuilderGetLevels = (*param_2)(param_1,"nvnTextureBuilderGetLevels");
+  nvnTextureBuilderGetFormat = (*param_2)(param_1,"nvnTextureBuilderGetFormat");
+  nvnTextureBuilderGetSamples = (*param_2)(param_1,"nvnTextureBuilderGetSamples");
+  nvnTextureBuilderGetSwizzle = (*param_2)(param_1,"nvnTextureBuilderGetSwizzle");
+  nvnTextureBuilderGetDepthStencilMode = (*param_2)(param_1,"nvnTextureBuilderGetDepthStencilMode");
+  nvnTextureBuilderGetPackagedTextureData =
+       (*param_2)(param_1,"nvnTextureBuilderGetPackagedTextureData");
+  nvnTextureBuilderGetPackagedTextureLayout =
+       (*param_2)(param_1,"nvnTextureBuilderGetPackagedTextureLayout");
+  nvnTextureBuilderGetStride = (*param_2)(param_1,"nvnTextureBuilderGetStride");
+  nvnTextureBuilderGetSparseTileLayout = (*param_2)(param_1,"nvnTextureBuilderGetSparseTileLayout");
+  nvnTextureBuilderGetGLTextureName = (*param_2)(param_1,"nvnTextureBuilderGetGLTextureName");
+  nvnTextureBuilderGetZCullStorageSize = (*param_2)(param_1,"nvnTextureBuilderGetZCullStorageSize");
+  nvnTextureBuilderGetMemoryPool = (*param_2)(param_1,"nvnTextureBuilderGetMemoryPool");
+  nvnTextureBuilderGetMemoryOffset = (*param_2)(param_1,"nvnTextureBuilderGetMemoryOffset");
+  nvnTextureBuilderGetRawStorageClass = (*param_2)(param_1,"nvnTextureBuilderGetRawStorageClass");
+  nvnTextureViewSetDefaults = (*param_2)(param_1,"nvnTextureViewSetDefaults");
+  nvnTextureViewSetLevels = (*param_2)(param_1,"nvnTextureViewSetLevels");
+  nvnTextureViewSetLayers = (*param_2)(param_1,"nvnTextureViewSetLayers");
+  nvnTextureViewSetFormat = (*param_2)(param_1,"nvnTextureViewSetFormat");
+  nvnTextureViewSetSwizzle = (*param_2)(param_1,"nvnTextureViewSetSwizzle");
+  nvnTextureViewSetDepthStencilMode = (*param_2)(param_1,"nvnTextureViewSetDepthStencilMode");
+  nvnTextureViewSetTarget = (*param_2)(param_1,"nvnTextureViewSetTarget");
+  nvnTextureViewGetLevels = (*param_2)(param_1,"nvnTextureViewGetLevels");
+  nvnTextureViewGetLayers = (*param_2)(param_1,"nvnTextureViewGetLayers");
+  nvnTextureViewGetFormat = (*param_2)(param_1,"nvnTextureViewGetFormat");
+  nvnTextureViewGetSwizzle = (*param_2)(param_1,"nvnTextureViewGetSwizzle");
+  nvnTextureViewGetDepthStencilMode = (*param_2)(param_1,"nvnTextureViewGetDepthStencilMode");
+  nvnTextureViewGetTarget = (*param_2)(param_1,"nvnTextureViewGetTarget");
+  nvnTextureViewCompare = (*param_2)(param_1,"nvnTextureViewCompare");
+  nvnTextureInitialize = (*param_2)(param_1,"nvnTextureInitialize");
+  nvnTextureGetZCullStorageSize = (*param_2)(param_1,"nvnTextureGetZCullStorageSize");
+  nvnTextureFinalize = (*param_2)(param_1,"nvnTextureFinalize");
+  nvnTextureSetDebugLabel = (*param_2)(param_1,"nvnTextureSetDebugLabel");
+  nvnTextureGetStorageClass = (*param_2)(param_1,"nvnTextureGetStorageClass");
+  nvnTextureGetViewOffset = (*param_2)(param_1,"nvnTextureGetViewOffset");
+  nvnTextureGetFlags = (*param_2)(param_1,"nvnTextureGetFlags");
+  nvnTextureGetTarget = (*param_2)(param_1,"nvnTextureGetTarget");
+  nvnTextureGetWidth = (*param_2)(param_1,"nvnTextureGetWidth");
+  nvnTextureGetHeight = (*param_2)(param_1,"nvnTextureGetHeight");
+  nvnTextureGetDepth = (*param_2)(param_1,"nvnTextureGetDepth");
+  nvnTextureGetLevels = (*param_2)(param_1,"nvnTextureGetLevels");
+  nvnTextureGetFormat = (*param_2)(param_1,"nvnTextureGetFormat");
+  nvnTextureGetSamples = (*param_2)(param_1,"nvnTextureGetSamples");
+  nvnTextureGetSwizzle = (*param_2)(param_1,"nvnTextureGetSwizzle");
+  nvnTextureGetDepthStencilMode = (*param_2)(param_1,"nvnTextureGetDepthStencilMode");
+  nvnTextureGetStride = (*param_2)(param_1,"nvnTextureGetStride");
+  nvnTextureGetTextureAddress = (*param_2)(param_1,"nvnTextureGetTextureAddress");
+  nvnTextureGetSparseTileLayout = (*param_2)(param_1,"nvnTextureGetSparseTileLayout");
+  nvnTextureWriteTexels = (*param_2)(param_1,"nvnTextureWriteTexels");
+  nvnTextureWriteTexelsStrided = (*param_2)(param_1,"nvnTextureWriteTexelsStrided");
+  nvnTextureReadTexels = (*param_2)(param_1,"nvnTextureReadTexels");
+  nvnTextureReadTexelsStrided = (*param_2)(param_1,"nvnTextureReadTexelsStrided");
+  nvnTextureFlushTexels = (*param_2)(param_1,"nvnTextureFlushTexels");
+  nvnTextureInvalidateTexels = (*param_2)(param_1,"nvnTextureInvalidateTexels");
+  nvnTextureGetMemoryPool = (*param_2)(param_1,"nvnTextureGetMemoryPool");
+  nvnTextureGetMemoryOffset = (*param_2)(param_1,"nvnTextureGetMemoryOffset");
+  nvnTextureGetStorageSize = (*param_2)(param_1,"nvnTextureGetStorageSize");
+  nvnTextureCompare = (*param_2)(param_1,"nvnTextureCompare");
+  nvnTextureGetDebugID = (*param_2)(param_1,"nvnTextureGetDebugID");
+  nvnTextureGetRawStorageClass = (*param_2)(param_1,"nvnTextureGetRawStorageClass");
+  nvnSamplerBuilderSetDevice = (*param_2)(param_1,"nvnSamplerBuilderSetDevice");
+  nvnSamplerBuilderSetDefaults = (*param_2)(param_1,"nvnSamplerBuilderSetDefaults");
+  nvnSamplerBuilderSetMinMagFilter = (*param_2)(param_1,"nvnSamplerBuilderSetMinMagFilter");
+  nvnSamplerBuilderSetWrapMode = (*param_2)(param_1,"nvnSamplerBuilderSetWrapMode");
+  nvnSamplerBuilderSetLodClamp = (*param_2)(param_1,"nvnSamplerBuilderSetLodClamp");
+  nvnSamplerBuilderSetLodBias = (*param_2)(param_1,"nvnSamplerBuilderSetLodBias");
+  nvnSamplerBuilderSetCompare = (*param_2)(param_1,"nvnSamplerBuilderSetCompare");
+  nvnSamplerBuilderSetBorderColor = (*param_2)(param_1,"nvnSamplerBuilderSetBorderColor");
+  nvnSamplerBuilderSetBorderColori = (*param_2)(param_1,"nvnSamplerBuilderSetBorderColori");
+  nvnSamplerBuilderSetBorderColorui = (*param_2)(param_1,"nvnSamplerBuilderSetBorderColorui");
+  nvnSamplerBuilderSetMaxAnisotropy = (*param_2)(param_1,"nvnSamplerBuilderSetMaxAnisotropy");
+  nvnSamplerBuilderSetReductionFilter = (*param_2)(param_1,"nvnSamplerBuilderSetReductionFilter");
+  nvnSamplerBuilderSetLodSnap = (*param_2)(param_1,"nvnSamplerBuilderSetLodSnap");
+  nvnSamplerBuilderGetDevice = (*param_2)(param_1,"nvnSamplerBuilderGetDevice");
+  nvnSamplerBuilderGetMinMagFilter = (*param_2)(param_1,"nvnSamplerBuilderGetMinMagFilter");
+  nvnSamplerBuilderGetWrapMode = (*param_2)(param_1,"nvnSamplerBuilderGetWrapMode");
+  nvnSamplerBuilderGetLodClamp = (*param_2)(param_1,"nvnSamplerBuilderGetLodClamp");
+  nvnSamplerBuilderGetLodBias = (*param_2)(param_1,"nvnSamplerBuilderGetLodBias");
+  nvnSamplerBuilderGetCompare = (*param_2)(param_1,"nvnSamplerBuilderGetCompare");
+  nvnSamplerBuilderGetBorderColor = (*param_2)(param_1,"nvnSamplerBuilderGetBorderColor");
+  nvnSamplerBuilderGetBorderColori = (*param_2)(param_1,"nvnSamplerBuilderGetBorderColori");
+  nvnSamplerBuilderGetBorderColorui = (*param_2)(param_1,"nvnSamplerBuilderGetBorderColorui");
+  nvnSamplerBuilderGetMaxAnisotropy = (*param_2)(param_1,"nvnSamplerBuilderGetMaxAnisotropy");
+  nvnSamplerBuilderGetReductionFilter = (*param_2)(param_1,"nvnSamplerBuilderGetReductionFilter");
+  nvnSamplerBuilderGetLodSnap = (*param_2)(param_1,"nvnSamplerBuilderGetLodSnap");
+  nvnSamplerInitialize = (*param_2)(param_1,"nvnSamplerInitialize");
+  nvnSamplerFinalize = (*param_2)(param_1,"nvnSamplerFinalize");
+  nvnSamplerSetDebugLabel = (*param_2)(param_1,"nvnSamplerSetDebugLabel");
+  nvnSamplerGetMinMagFilter = (*param_2)(param_1,"nvnSamplerGetMinMagFilter");
+  nvnSamplerGetWrapMode = (*param_2)(param_1,"nvnSamplerGetWrapMode");
+  nvnSamplerGetLodClamp = (*param_2)(param_1,"nvnSamplerGetLodClamp");
+  nvnSamplerGetLodBias = (*param_2)(param_1,"nvnSamplerGetLodBias");
+  nvnSamplerGetCompare = (*param_2)(param_1,"nvnSamplerGetCompare");
+  nvnSamplerGetBorderColor = (*param_2)(param_1,"nvnSamplerGetBorderColor");
+  nvnSamplerGetBorderColori = (*param_2)(param_1,"nvnSamplerGetBorderColori");
+  nvnSamplerGetBorderColorui = (*param_2)(param_1,"nvnSamplerGetBorderColorui");
+  nvnSamplerGetMaxAnisotropy = (*param_2)(param_1,"nvnSamplerGetMaxAnisotropy");
+  nvnSamplerGetReductionFilter = (*param_2)(param_1,"nvnSamplerGetReductionFilter");
+  nvnSamplerCompare = (*param_2)(param_1,"nvnSamplerCompare");
+  nvnSamplerGetDebugID = (*param_2)(param_1,"nvnSamplerGetDebugID");
+  nvnBlendStateSetDefaults = (*param_2)(param_1,"nvnBlendStateSetDefaults");
+  nvnBlendStateSetBlendTarget = (*param_2)(param_1,"nvnBlendStateSetBlendTarget");
+  nvnBlendStateSetBlendFunc = (*param_2)(param_1,"nvnBlendStateSetBlendFunc");
+  nvnBlendStateSetBlendEquation = (*param_2)(param_1,"nvnBlendStateSetBlendEquation");
+  nvnBlendStateSetAdvancedMode = (*param_2)(param_1,"nvnBlendStateSetAdvancedMode");
+  nvnBlendStateSetAdvancedOverlap = (*param_2)(param_1,"nvnBlendStateSetAdvancedOverlap");
+  nvnBlendStateSetAdvancedPremultipliedSrc =
+       (*param_2)(param_1,"nvnBlendStateSetAdvancedPremultipliedSrc");
+  nvnBlendStateSetAdvancedNormalizedDst =
+       (*param_2)(param_1,"nvnBlendStateSetAdvancedNormalizedDst");
+  nvnBlendStateGetBlendTarget = (*param_2)(param_1,"nvnBlendStateGetBlendTarget");
+  nvnBlendStateGetBlendFunc = (*param_2)(param_1,"nvnBlendStateGetBlendFunc");
+  nvnBlendStateGetBlendEquation = (*param_2)(param_1,"nvnBlendStateGetBlendEquation");
+  nvnBlendStateGetAdvancedMode = (*param_2)(param_1,"nvnBlendStateGetAdvancedMode");
+  nvnBlendStateGetAdvancedOverlap = (*param_2)(param_1,"nvnBlendStateGetAdvancedOverlap");
+  nvnBlendStateGetAdvancedPremultipliedSrc =
+       (*param_2)(param_1,"nvnBlendStateGetAdvancedPremultipliedSrc");
+  nvnBlendStateGetAdvancedNormalizedDst =
+       (*param_2)(param_1,"nvnBlendStateGetAdvancedNormalizedDst");
+  nvnColorStateSetDefaults = (*param_2)(param_1,"nvnColorStateSetDefaults");
+  nvnColorStateSetBlendEnable = (*param_2)(param_1,"nvnColorStateSetBlendEnable");
+  nvnColorStateSetLogicOp = (*param_2)(param_1,"nvnColorStateSetLogicOp");
+  nvnColorStateSetAlphaTest = (*param_2)(param_1,"nvnColorStateSetAlphaTest");
+  nvnColorStateGetBlendEnable = (*param_2)(param_1,"nvnColorStateGetBlendEnable");
+  nvnColorStateGetLogicOp = (*param_2)(param_1,"nvnColorStateGetLogicOp");
+  nvnColorStateGetAlphaTest = (*param_2)(param_1,"nvnColorStateGetAlphaTest");
+  nvnChannelMaskStateSetDefaults = (*param_2)(param_1,"nvnChannelMaskStateSetDefaults");
+  nvnChannelMaskStateSetChannelMask = (*param_2)(param_1,"nvnChannelMaskStateSetChannelMask");
+  nvnChannelMaskStateGetChannelMask = (*param_2)(param_1,"nvnChannelMaskStateGetChannelMask");
+  nvnMultisampleStateSetDefaults = (*param_2)(param_1,"nvnMultisampleStateSetDefaults");
+  nvnMultisampleStateSetMultisampleEnable =
+       (*param_2)(param_1,"nvnMultisampleStateSetMultisampleEnable");
+  nvnMultisampleStateSetSamples = (*param_2)(param_1,"nvnMultisampleStateSetSamples");
+  nvnMultisampleStateSetAlphaToCoverageEnable =
+       (*param_2)(param_1,"nvnMultisampleStateSetAlphaToCoverageEnable");
+  nvnMultisampleStateSetAlphaToCoverageDither =
+       (*param_2)(param_1,"nvnMultisampleStateSetAlphaToCoverageDither");
+  nvnMultisampleStateGetMultisampleEnable =
+       (*param_2)(param_1,"nvnMultisampleStateGetMultisampleEnable");
+  nvnMultisampleStateGetSamples = (*param_2)(param_1,"nvnMultisampleStateGetSamples");
+  nvnMultisampleStateGetAlphaToCoverageEnable =
+       (*param_2)(param_1,"nvnMultisampleStateGetAlphaToCoverageEnable");
+  nvnMultisampleStateGetAlphaToCoverageDither =
+       (*param_2)(param_1,"nvnMultisampleStateGetAlphaToCoverageDither");
+  nvnMultisampleStateSetRasterSamples = (*param_2)(param_1,"nvnMultisampleStateSetRasterSamples");
+  nvnMultisampleStateGetRasterSamples = (*param_2)(param_1,"nvnMultisampleStateGetRasterSamples");
+  nvnMultisampleStateSetCoverageModulationMode =
+       (*param_2)(param_1,"nvnMultisampleStateSetCoverageModulationMode");
+  nvnMultisampleStateGetCoverageModulationMode =
+       (*param_2)(param_1,"nvnMultisampleStateGetCoverageModulationMode");
+  nvnMultisampleStateSetCoverageToColorEnable =
+       (*param_2)(param_1,"nvnMultisampleStateSetCoverageToColorEnable");
+  nvnMultisampleStateGetCoverageToColorEnable =
+       (*param_2)(param_1,"nvnMultisampleStateGetCoverageToColorEnable");
+  nvnMultisampleStateSetCoverageToColorOutput =
+       (*param_2)(param_1,"nvnMultisampleStateSetCoverageToColorOutput");
+  nvnMultisampleStateGetCoverageToColorOutput =
+       (*param_2)(param_1,"nvnMultisampleStateGetCoverageToColorOutput");
+  nvnMultisampleStateSetSampleLocationsEnable =
+       (*param_2)(param_1,"nvnMultisampleStateSetSampleLocationsEnable");
+  nvnMultisampleStateGetSampleLocationsEnable =
+       (*param_2)(param_1,"nvnMultisampleStateGetSampleLocationsEnable");
+  nvnMultisampleStateGetSampleLocationsGrid =
+       (*param_2)(param_1,"nvnMultisampleStateGetSampleLocationsGrid");
+  nvnMultisampleStateSetSampleLocationsGridEnable =
+       (*param_2)(param_1,"nvnMultisampleStateSetSampleLocationsGridEnable");
+  nvnMultisampleStateGetSampleLocationsGridEnable =
+       (*param_2)(param_1,"nvnMultisampleStateGetSampleLocationsGridEnable");
+  nvnMultisampleStateSetSampleLocations =
+       (*param_2)(param_1,"nvnMultisampleStateSetSampleLocations");
+  nvnPolygonStateSetDefaults = (*param_2)(param_1,"nvnPolygonStateSetDefaults");
+  nvnPolygonStateSetCullFace = (*param_2)(param_1,"nvnPolygonStateSetCullFace");
+  nvnPolygonStateSetFrontFace = (*param_2)(param_1,"nvnPolygonStateSetFrontFace");
+  nvnPolygonStateSetPolygonMode = (*param_2)(param_1,"nvnPolygonStateSetPolygonMode");
+  nvnPolygonStateSetPolygonOffsetEnables =
+       (*param_2)(param_1,"nvnPolygonStateSetPolygonOffsetEnables");
+  nvnPolygonStateGetCullFace = (*param_2)(param_1,"nvnPolygonStateGetCullFace");
+  nvnPolygonStateGetFrontFace = (*param_2)(param_1,"nvnPolygonStateGetFrontFace");
+  nvnPolygonStateGetPolygonMode = (*param_2)(param_1,"nvnPolygonStateGetPolygonMode");
+  nvnPolygonStateGetPolygonOffsetEnables =
+       (*param_2)(param_1,"nvnPolygonStateGetPolygonOffsetEnables");
+  nvnDepthStencilStateSetDefaults = (*param_2)(param_1,"nvnDepthStencilStateSetDefaults");
+  nvnDepthStencilStateSetDepthTestEnable =
+       (*param_2)(param_1,"nvnDepthStencilStateSetDepthTestEnable");
+  nvnDepthStencilStateSetDepthWriteEnable =
+       (*param_2)(param_1,"nvnDepthStencilStateSetDepthWriteEnable");
+  nvnDepthStencilStateSetDepthFunc = (*param_2)(param_1,"nvnDepthStencilStateSetDepthFunc");
+  nvnDepthStencilStateSetStencilTestEnable =
+       (*param_2)(param_1,"nvnDepthStencilStateSetStencilTestEnable");
+  nvnDepthStencilStateSetStencilFunc = (*param_2)(param_1,"nvnDepthStencilStateSetStencilFunc");
+  nvnDepthStencilStateSetStencilOp = (*param_2)(param_1,"nvnDepthStencilStateSetStencilOp");
+  nvnDepthStencilStateGetDepthTestEnable =
+       (*param_2)(param_1,"nvnDepthStencilStateGetDepthTestEnable");
+  nvnDepthStencilStateGetDepthWriteEnable =
+       (*param_2)(param_1,"nvnDepthStencilStateGetDepthWriteEnable");
+  nvnDepthStencilStateGetDepthFunc = (*param_2)(param_1,"nvnDepthStencilStateGetDepthFunc");
+  nvnDepthStencilStateGetStencilTestEnable =
+       (*param_2)(param_1,"nvnDepthStencilStateGetStencilTestEnable");
+  nvnDepthStencilStateGetStencilFunc = (*param_2)(param_1,"nvnDepthStencilStateGetStencilFunc");
+  nvnDepthStencilStateGetStencilOp = (*param_2)(param_1,"nvnDepthStencilStateGetStencilOp");
+  nvnVertexAttribStateSetDefaults = (*param_2)(param_1,"nvnVertexAttribStateSetDefaults");
+  nvnVertexAttribStateSetFormat = (*param_2)(param_1,"nvnVertexAttribStateSetFormat");
+  nvnVertexAttribStateSetStreamIndex = (*param_2)(param_1,"nvnVertexAttribStateSetStreamIndex");
+  nvnVertexAttribStateGetFormat = (*param_2)(param_1,"nvnVertexAttribStateGetFormat");
+  nvnVertexAttribStateGetStreamIndex = (*param_2)(param_1,"nvnVertexAttribStateGetStreamIndex");
+  nvnVertexStreamStateSetDefaults = (*param_2)(param_1,"nvnVertexStreamStateSetDefaults");
+  nvnVertexStreamStateSetStride = (*param_2)(param_1,"nvnVertexStreamStateSetStride");
+  nvnVertexStreamStateSetDivisor = (*param_2)(param_1,"nvnVertexStreamStateSetDivisor");
+  nvnVertexStreamStateGetStride = (*param_2)(param_1,"nvnVertexStreamStateGetStride");
+  nvnVertexStreamStateGetDivisor = (*param_2)(param_1,"nvnVertexStreamStateGetDivisor");
+  nvnCommandBufferInitialize = (*param_2)(param_1,"nvnCommandBufferInitialize");
+  nvnCommandBufferFinalize = (*param_2)(param_1,"nvnCommandBufferFinalize");
+  nvnCommandBufferSetDebugLabel = (*param_2)(param_1,"nvnCommandBufferSetDebugLabel");
+  nvnCommandBufferSetMemoryCallback = (*param_2)(param_1,"nvnCommandBufferSetMemoryCallback");
+  nvnCommandBufferSetMemoryCallbackData =
+       (*param_2)(param_1,"nvnCommandBufferSetMemoryCallbackData");
+  nvnCommandBufferSetCommandMemoryCallbackEnabled =
+       (*param_2)(param_1,"nvnCommandBufferSetCommandMemoryCallbackEnabled");
+  nvnCommandBufferAddCommandMemory = (*param_2)(param_1,"nvnCommandBufferAddCommandMemory");
+  nvnCommandBufferAddControlMemory = (*param_2)(param_1,"nvnCommandBufferAddControlMemory");
+  nvnCommandBufferGetCommandMemorySize = (*param_2)(param_1,"nvnCommandBufferGetCommandMemorySize");
+  nvnCommandBufferGetCommandMemoryUsed = (*param_2)(param_1,"nvnCommandBufferGetCommandMemoryUsed");
+  nvnCommandBufferGetCommandMemoryFree = (*param_2)(param_1,"nvnCommandBufferGetCommandMemoryFree");
+  nvnCommandBufferGetControlMemorySize = (*param_2)(param_1,"nvnCommandBufferGetControlMemorySize");
+  nvnCommandBufferGetControlMemoryUsed = (*param_2)(param_1,"nvnCommandBufferGetControlMemoryUsed");
+  nvnCommandBufferGetControlMemoryFree = (*param_2)(param_1,"nvnCommandBufferGetControlMemoryFree");
+  nvnCommandBufferBeginRecording = (*param_2)(param_1,"nvnCommandBufferBeginRecording");
+  nvnCommandBufferEndRecording = (*param_2)(param_1,"nvnCommandBufferEndRecording");
+  nvnCommandBufferCallCommands = (*param_2)(param_1,"nvnCommandBufferCallCommands");
+  nvnCommandBufferCopyCommands = (*param_2)(param_1,"nvnCommandBufferCopyCommands");
+  nvnCommandBufferBindBlendState = (*param_2)(param_1,"nvnCommandBufferBindBlendState");
+  nvnCommandBufferBindChannelMaskState = (*param_2)(param_1,"nvnCommandBufferBindChannelMaskState");
+  nvnCommandBufferBindColorState = (*param_2)(param_1,"nvnCommandBufferBindColorState");
+  nvnCommandBufferBindMultisampleState = (*param_2)(param_1,"nvnCommandBufferBindMultisampleState");
+  nvnCommandBufferBindPolygonState = (*param_2)(param_1,"nvnCommandBufferBindPolygonState");
+  nvnCommandBufferBindDepthStencilState =
+       (*param_2)(param_1,"nvnCommandBufferBindDepthStencilState");
+  nvnCommandBufferBindVertexAttribState =
+       (*param_2)(param_1,"nvnCommandBufferBindVertexAttribState");
+  nvnCommandBufferBindVertexStreamState =
+       (*param_2)(param_1,"nvnCommandBufferBindVertexStreamState");
+  nvnCommandBufferBindProgram = (*param_2)(param_1,"nvnCommandBufferBindProgram");
+  nvnCommandBufferBindVertexBuffer = (*param_2)(param_1,"nvnCommandBufferBindVertexBuffer");
+  nvnCommandBufferBindVertexBuffers = (*param_2)(param_1,"nvnCommandBufferBindVertexBuffers");
+  nvnCommandBufferBindUniformBuffer = (*param_2)(param_1,"nvnCommandBufferBindUniformBuffer");
+  nvnCommandBufferBindUniformBuffers = (*param_2)(param_1,"nvnCommandBufferBindUniformBuffers");
+  nvnCommandBufferBindTransformFeedbackBuffer =
+       (*param_2)(param_1,"nvnCommandBufferBindTransformFeedbackBuffer");
+  nvnCommandBufferBindTransformFeedbackBuffers =
+       (*param_2)(param_1,"nvnCommandBufferBindTransformFeedbackBuffers");
+  nvnCommandBufferBindStorageBuffer = (*param_2)(param_1,"nvnCommandBufferBindStorageBuffer");
+  nvnCommandBufferBindStorageBuffers = (*param_2)(param_1,"nvnCommandBufferBindStorageBuffers");
+  nvnCommandBufferBindTexture = (*param_2)(param_1,"nvnCommandBufferBindTexture");
+  nvnCommandBufferBindTextures = (*param_2)(param_1,"nvnCommandBufferBindTextures");
+  nvnCommandBufferBindImage = (*param_2)(param_1,"nvnCommandBufferBindImage");
+  nvnCommandBufferBindImages = (*param_2)(param_1,"nvnCommandBufferBindImages");
+  nvnCommandBufferSetPatchSize = (*param_2)(param_1,"nvnCommandBufferSetPatchSize");
+  nvnCommandBufferSetInnerTessellationLevels =
+       (*param_2)(param_1,"nvnCommandBufferSetInnerTessellationLevels");
+  nvnCommandBufferSetOuterTessellationLevels =
+       (*param_2)(param_1,"nvnCommandBufferSetOuterTessellationLevels");
+  nvnCommandBufferSetPrimitiveRestart = (*param_2)(param_1,"nvnCommandBufferSetPrimitiveRestart");
+  nvnCommandBufferBeginTransformFeedback =
+       (*param_2)(param_1,"nvnCommandBufferBeginTransformFeedback");
+  nvnCommandBufferEndTransformFeedback = (*param_2)(param_1,"nvnCommandBufferEndTransformFeedback");
+  nvnCommandBufferPauseTransformFeedback =
+       (*param_2)(param_1,"nvnCommandBufferPauseTransformFeedback");
+  nvnCommandBufferResumeTransformFeedback =
+       (*param_2)(param_1,"nvnCommandBufferResumeTransformFeedback");
+  nvnCommandBufferDrawTransformFeedback =
+       (*param_2)(param_1,"nvnCommandBufferDrawTransformFeedback");
+  nvnCommandBufferDrawArrays = (*param_2)(param_1,"nvnCommandBufferDrawArrays");
+  nvnCommandBufferDrawElements = (*param_2)(param_1,"nvnCommandBufferDrawElements");
+  nvnCommandBufferDrawElementsBaseVertex =
+       (*param_2)(param_1,"nvnCommandBufferDrawElementsBaseVertex");
+  nvnCommandBufferDrawArraysInstanced = (*param_2)(param_1,"nvnCommandBufferDrawArraysInstanced");
+  nvnCommandBufferDrawElementsInstanced =
+       (*param_2)(param_1,"nvnCommandBufferDrawElementsInstanced");
+  nvnCommandBufferDrawArraysIndirect = (*param_2)(param_1,"nvnCommandBufferDrawArraysIndirect");
+  nvnCommandBufferDrawElementsIndirect = (*param_2)(param_1,"nvnCommandBufferDrawElementsIndirect");
+  nvnCommandBufferMultiDrawArraysIndirectCount =
+       (*param_2)(param_1,"nvnCommandBufferMultiDrawArraysIndirectCount");
+  nvnCommandBufferMultiDrawElementsIndirectCount =
+       (*param_2)(param_1,"nvnCommandBufferMultiDrawElementsIndirectCount");
+  nvnCommandBufferClearColor = (*param_2)(param_1,"nvnCommandBufferClearColor");
+  nvnCommandBufferClearColori = (*param_2)(param_1,"nvnCommandBufferClearColori");
+  nvnCommandBufferClearColorui = (*param_2)(param_1,"nvnCommandBufferClearColorui");
+  nvnCommandBufferClearDepthStencil = (*param_2)(param_1,"nvnCommandBufferClearDepthStencil");
+  nvnCommandBufferDispatchCompute = (*param_2)(param_1,"nvnCommandBufferDispatchCompute");
+  nvnCommandBufferDispatchComputeIndirect =
+       (*param_2)(param_1,"nvnCommandBufferDispatchComputeIndirect");
+  nvnCommandBufferSetViewport = (*param_2)(param_1,"nvnCommandBufferSetViewport");
+  nvnCommandBufferSetViewports = (*param_2)(param_1,"nvnCommandBufferSetViewports");
+  nvnCommandBufferSetViewportSwizzles = (*param_2)(param_1,"nvnCommandBufferSetViewportSwizzles");
+  nvnCommandBufferSetScissor = (*param_2)(param_1,"nvnCommandBufferSetScissor");
+  nvnCommandBufferSetScissors = (*param_2)(param_1,"nvnCommandBufferSetScissors");
+  nvnCommandBufferSetDepthRange = (*param_2)(param_1,"nvnCommandBufferSetDepthRange");
+  nvnCommandBufferSetDepthBounds = (*param_2)(param_1,"nvnCommandBufferSetDepthBounds");
+  nvnCommandBufferSetDepthRanges = (*param_2)(param_1,"nvnCommandBufferSetDepthRanges");
+  nvnCommandBufferSetTiledCacheAction = (*param_2)(param_1,"nvnCommandBufferSetTiledCacheAction");
+  nvnCommandBufferSetTiledCacheTileSize =
+       (*param_2)(param_1,"nvnCommandBufferSetTiledCacheTileSize");
+  nvnCommandBufferBindSeparateTexture = (*param_2)(param_1,"nvnCommandBufferBindSeparateTexture");
+  nvnCommandBufferBindSeparateSampler = (*param_2)(param_1,"nvnCommandBufferBindSeparateSampler");
+  nvnCommandBufferBindSeparateTextures = (*param_2)(param_1,"nvnCommandBufferBindSeparateTextures");
+  nvnCommandBufferBindSeparateSamplers = (*param_2)(param_1,"nvnCommandBufferBindSeparateSamplers");
+  nvnCommandBufferSetStencilValueMask = (*param_2)(param_1,"nvnCommandBufferSetStencilValueMask");
+  nvnCommandBufferSetStencilMask = (*param_2)(param_1,"nvnCommandBufferSetStencilMask");
+  nvnCommandBufferSetStencilRef = (*param_2)(param_1,"nvnCommandBufferSetStencilRef");
+  nvnCommandBufferSetBlendColor = (*param_2)(param_1,"nvnCommandBufferSetBlendColor");
+  nvnCommandBufferSetPointSize = (*param_2)(param_1,"nvnCommandBufferSetPointSize");
+  nvnCommandBufferSetLineWidth = (*param_2)(param_1,"nvnCommandBufferSetLineWidth");
+  nvnCommandBufferSetPolygonOffsetClamp =
+       (*param_2)(param_1,"nvnCommandBufferSetPolygonOffsetClamp");
+  nvnCommandBufferSetAlphaRef = (*param_2)(param_1,"nvnCommandBufferSetAlphaRef");
+  nvnCommandBufferSetSampleMask = (*param_2)(param_1,"nvnCommandBufferSetSampleMask");
+  nvnCommandBufferSetRasterizerDiscard = (*param_2)(param_1,"nvnCommandBufferSetRasterizerDiscard");
+  nvnCommandBufferSetDepthClamp = (*param_2)(param_1,"nvnCommandBufferSetDepthClamp");
+  nvnCommandBufferSetConservativeRasterEnable =
+       (*param_2)(param_1,"nvnCommandBufferSetConservativeRasterEnable");
+  nvnCommandBufferSetConservativeRasterDilate =
+       (*param_2)(param_1,"nvnCommandBufferSetConservativeRasterDilate");
+  nvnCommandBufferSetSubpixelPrecisionBias =
+       (*param_2)(param_1,"nvnCommandBufferSetSubpixelPrecisionBias");
+  nvnCommandBufferCopyBufferToTexture = (*param_2)(param_1,"nvnCommandBufferCopyBufferToTexture");
+  nvnCommandBufferCopyTextureToBuffer = (*param_2)(param_1,"nvnCommandBufferCopyTextureToBuffer");
+  nvnCommandBufferCopyTextureToTexture = (*param_2)(param_1,"nvnCommandBufferCopyTextureToTexture");
+  nvnCommandBufferCopyBufferToBuffer = (*param_2)(param_1,"nvnCommandBufferCopyBufferToBuffer");
+  nvnCommandBufferClearBuffer = (*param_2)(param_1,"nvnCommandBufferClearBuffer");
+  nvnCommandBufferClearTexture = (*param_2)(param_1,"nvnCommandBufferClearTexture");
+  nvnCommandBufferClearTexturei = (*param_2)(param_1,"nvnCommandBufferClearTexturei");
+  nvnCommandBufferClearTextureui = (*param_2)(param_1,"nvnCommandBufferClearTextureui");
+  nvnCommandBufferUpdateUniformBuffer = (*param_2)(param_1,"nvnCommandBufferUpdateUniformBuffer");
+  nvnCommandBufferReportCounter = (*param_2)(param_1,"nvnCommandBufferReportCounter");
+  nvnCommandBufferResetCounter = (*param_2)(param_1,"nvnCommandBufferResetCounter");
+  nvnCommandBufferReportValue = (*param_2)(param_1,"nvnCommandBufferReportValue");
+  nvnCommandBufferSetRenderEnable = (*param_2)(param_1,"nvnCommandBufferSetRenderEnable");
+  nvnCommandBufferSetRenderEnableConditional =
+       (*param_2)(param_1,"nvnCommandBufferSetRenderEnableConditional");
+  nvnCommandBufferSetRenderTargets = (*param_2)(param_1,"nvnCommandBufferSetRenderTargets");
+  nvnCommandBufferDiscardColor = (*param_2)(param_1,"nvnCommandBufferDiscardColor");
+  nvnCommandBufferDiscardDepthStencil = (*param_2)(param_1,"nvnCommandBufferDiscardDepthStencil");
+  nvnCommandBufferDownsample = (*param_2)(param_1,"nvnCommandBufferDownsample");
+  nvnCommandBufferTiledDownsample = (*param_2)(param_1,"nvnCommandBufferTiledDownsample");
+  nvnCommandBufferDownsampleTextureView =
+       (*param_2)(param_1,"nvnCommandBufferDownsampleTextureView");
+  nvnCommandBufferTiledDownsampleTextureView =
+       (*param_2)(param_1,"nvnCommandBufferTiledDownsampleTextureView");
+  nvnCommandBufferBarrier = (*param_2)(param_1,"nvnCommandBufferBarrier");
+  nvnCommandBufferWaitSync = (*param_2)(param_1,"nvnCommandBufferWaitSync");
+  nvnCommandBufferFenceSync = (*param_2)(param_1,"nvnCommandBufferFenceSync");
+  nvnCommandBufferSetTexturePool = (*param_2)(param_1,"nvnCommandBufferSetTexturePool");
+  nvnCommandBufferSetSamplerPool = (*param_2)(param_1,"nvnCommandBufferSetSamplerPool");
+  nvnCommandBufferSetShaderScratchMemory =
+       (*param_2)(param_1,"nvnCommandBufferSetShaderScratchMemory");
+  nvnCommandBufferSaveZCullData = (*param_2)(param_1,"nvnCommandBufferSaveZCullData");
+  nvnCommandBufferRestoreZCullData = (*param_2)(param_1,"nvnCommandBufferRestoreZCullData");
+  nvnCommandBufferSetCopyRowStride = (*param_2)(param_1,"nvnCommandBufferSetCopyRowStride");
+  nvnCommandBufferSetCopyImageStride = (*param_2)(param_1,"nvnCommandBufferSetCopyImageStride");
+  nvnCommandBufferGetCopyRowStride = (*param_2)(param_1,"nvnCommandBufferGetCopyRowStride");
+  nvnCommandBufferGetCopyImageStride = (*param_2)(param_1,"nvnCommandBufferGetCopyImageStride");
+  nvnCommandBufferDrawTexture = (*param_2)(param_1,"nvnCommandBufferDrawTexture");
+  nvnProgramSetSubroutineLinkage = (*param_2)(param_1,"nvnProgramSetSubroutineLinkage");
+  nvnCommandBufferSetProgramSubroutines =
+       (*param_2)(param_1,"nvnCommandBufferSetProgramSubroutines");
+  nvnCommandBufferBindCoverageModulationTable =
+       (*param_2)(param_1,"nvnCommandBufferBindCoverageModulationTable");
+  nvnCommandBufferResolveDepthBuffer = (*param_2)(param_1,"nvnCommandBufferResolveDepthBuffer");
+  nvnCommandBufferSetColorReductionEnable =
+       (*param_2)(param_1,"nvnCommandBufferSetColorReductionEnable");
+  nvnCommandBufferSetColorReductionThresholds =
+       (*param_2)(param_1,"nvnCommandBufferSetColorReductionThresholds");
+  nvnCommandBufferPushDebugGroupStatic = (*param_2)(param_1,"nvnCommandBufferPushDebugGroupStatic");
+  nvnCommandBufferPushDebugGroupDynamic =
+       (*param_2)(param_1,"nvnCommandBufferPushDebugGroupDynamic");
+  nvnCommandBufferPushDebugGroup = (*param_2)(param_1,"nvnCommandBufferPushDebugGroup");
+  nvnCommandBufferPopDebugGroup = (*param_2)(param_1,"nvnCommandBufferPopDebugGroup");
+  nvnCommandBufferPopDebugGroupId = (*param_2)(param_1,"nvnCommandBufferPopDebugGroupId");
+  nvnCommandBufferInsertDebugMarkerStatic =
+       (*param_2)(param_1,"nvnCommandBufferInsertDebugMarkerStatic");
+  nvnCommandBufferInsertDebugMarkerDynamic =
+       (*param_2)(param_1,"nvnCommandBufferInsertDebugMarkerDynamic");
+  nvnCommandBufferInsertDebugMarker = (*param_2)(param_1,"nvnCommandBufferInsertDebugMarker");
+  nvnCommandBufferGetMemoryCallback = (*param_2)(param_1,"nvnCommandBufferGetMemoryCallback");
+  nvnCommandBufferGetMemoryCallbackData =
+       (*param_2)(param_1,"nvnCommandBufferGetMemoryCallbackData");
+  nvnCommandBufferIsRecording = (*param_2)(param_1,"nvnCommandBufferIsRecording");
+  nvnSyncInitialize = (*param_2)(param_1,"nvnSyncInitialize");
+  nvnSyncFinalize = (*param_2)(param_1,"nvnSyncFinalize");
+  nvnSyncSetDebugLabel = (*param_2)(param_1,"nvnSyncSetDebugLabel");
+  nvnQueueFenceSync = (*param_2)(param_1,"nvnQueueFenceSync");
+  nvnSyncWait = (*param_2)(param_1,"nvnSyncWait");
+  nvnQueueWaitSync = (*param_2)(param_1,"nvnQueueWaitSync");
+  nvnSyncInitializeFromFencedGLSync = (*param_2)(param_1,"nvnSyncInitializeFromFencedGLSync");
+  nvnSyncCreateGLSync = (*param_2)(param_1,"nvnSyncCreateGLSync");
+  nvnEventBuilderSetDefaults = (*param_2)(param_1,"nvnEventBuilderSetDefaults");
+  nvnEventBuilderSetStorage = (*param_2)(param_1,"nvnEventBuilderSetStorage");
+  nvnEventBuilderGetStorage = (*param_2)(param_1,"nvnEventBuilderGetStorage");
+  nvnEventBuilderGetMemoryPool = (*param_2)(param_1,"nvnEventBuilderGetMemoryPool");
+  nvnEventBuilderGetMemoryOffset = (*param_2)(param_1,"nvnEventBuilderGetMemoryOffset");
+  nvnEventInitialize = (*param_2)(param_1,"nvnEventInitialize");
+  nvnEventFinalize = (*param_2)(param_1,"nvnEventFinalize");
+  nvnEventGetValue = (*param_2)(param_1,"nvnEventGetValue");
+  nvnEventSignal = (*param_2)(param_1,"nvnEventSignal");
+  nvnEventGetMemoryPool = (*param_2)(param_1,"nvnEventGetMemoryPool");
+  nvnEventGetMemoryOffset = (*param_2)(param_1,"nvnEventGetMemoryOffset");
+  nvnCommandBufferWaitEvent = (*param_2)(param_1,"nvnCommandBufferWaitEvent");
+  nvnCommandBufferSignalEvent = (*param_2)(param_1,"nvnCommandBufferSignalEvent");
+  nvnCommandBufferSetStencilCullCriteria =
+       (*param_2)(param_1,"nvnCommandBufferSetStencilCullCriteria");
+  return;
+}
+
+nvnQueueAcquireTexture: 710593fad0
+nvnQueuePresentTexture: 710593fac8
+nvnDeviceGetProcAddress: 710593f918
+nvnDeviceInitialize: 710593f900
+nvnQueueSubmitCommands: 710593fab0
+

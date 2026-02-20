@@ -137,11 +137,8 @@ unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
 
 // Resolves `sym_nul` directly from module image without nn::ro::Lookup* calls.
 // `sym_nul` must be null-terminated, e.g. b"ssbusync_set_enabled\0".
-pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
-    let mut out = 0usize;
-    if ro::LookupModuleSymbol(&mut out, module as *const ro::Module, sym_nul.as_ptr()) == 0 && out != 0 {
-        return Some(out);
-    }
+pub unsafe fn resolve_export_no_ro(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
+    // DO NOT call ro::LookupModuleSymbol here (re-entrant under nro_hook)
 
     let base = module.NroPtr as *const u8;
     if base.is_null() {
@@ -155,6 +152,7 @@ pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usiz
         return None;
     }
 
+    // MOD0.dynamic_off is an offset from the MOD0 header to the ELF _DYNAMIC array. :contentReference[oaicite:1]{index=1}
     let dyn_ptr = (mod0 as *const u8).add((*mod0).dynamic_off as usize) as *const Elf64Dyn;
 
     let mut symtab: *const Elf64Sym = core::ptr::null();
@@ -162,6 +160,7 @@ pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usiz
     let mut strsz: usize = 0;
     let mut hash: *const u32 = core::ptr::null();
 
+    // Keep this bounded; 512 is fine.
     for i in 0..512usize {
         let d = &*dyn_ptr.add(i);
         if d.d_tag == DT_NULL {
@@ -171,8 +170,8 @@ pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usiz
         match d.d_tag {
             DT_SYMTAB => symtab = base.add(d.d_val as usize) as *const Elf64Sym,
             DT_STRTAB => strtab = base.add(d.d_val as usize),
-            DT_STRSZ => strsz = d.d_val as usize,
-            DT_HASH => hash = base.add(d.d_val as usize) as *const u32,
+            DT_STRSZ  => strsz  = d.d_val as usize,
+            DT_HASH   => hash   = base.add(d.d_val as usize) as *const u32,
             _ => {}
         }
     }
@@ -190,6 +189,7 @@ pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usiz
         }
 
         if cstr_eq(strtab.add(st_name), sym_nul) {
+            // ET_DYN-style: st_value is relative to module base.
             let addr = (base as usize).wrapping_add(s.st_value as usize);
             if addr != 0 {
                 return Some(addr);
@@ -215,7 +215,7 @@ pub unsafe fn observe_and_cache_export(
     }
 
     let module = info.module as *const ro::Module;
-    let resolved = unsafe { resolve_export(&*module, symbol_nul) };
+    let resolved = unsafe { resolve_export_no_ro(&*module, symbol_nul) };
 
     if let Some(addr) = resolved {
         cache.set(addr);
@@ -343,12 +343,10 @@ pub unsafe fn try_claim_external_disabler() -> DisableResult {
     disable_ssbusync_if_cached()
 }
 
-// Returns true exactly once per process lifetime (or until reset_custom_install_claim()).
 pub fn claim_custom_install_once() -> bool {
     !CUSTOM_INSTALL_CLAIMED.swap(true, Ordering::AcqRel)
 }
 
-// Optional for hot-reload/testing paths.
 pub fn reset_custom_install_claim() {
     CUSTOM_INSTALL_CLAIMED.store(false, Ordering::Release);
 }
