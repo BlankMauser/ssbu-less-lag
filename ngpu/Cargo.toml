@@ -1,7 +1,7 @@
 [package]
 name = "ngpu"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [package.metadata.skyline]
 titleid = "01006A800016E000" # Smash Ultimate
