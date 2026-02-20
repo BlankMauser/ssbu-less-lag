@@ -51,7 +51,9 @@ unsafe extern "C" {
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
-
+    println!("[ssbusync] Installing Hooks. \n");
+    if emulator {println!("[ssbusync] Emulator Detected. \n"); }
+    
     vsync_history::install();
     swapchain::install(config);
     off_by_one::install();
@@ -79,10 +81,11 @@ pub fn Enable_Triple_Buffer() {
 pub fn main() {
     unsafe {
         if compatibility::disablers() {
-            println!("[ssbusync] Disabler detected -> not installing hooks.");
+            println!("[ssbusync] Disabler detected -> not installing hooks. \n");
             return;
         }
     }
+    println!("[ssbusync] No disablers detected. \n");
     Install_SSBU_Sync(SsbuSyncConfig::default());
     // profiling::setup();
     // sequencing::install();
