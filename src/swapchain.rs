@@ -266,9 +266,7 @@ pub fn install(config: SsbuSyncConfig) {
         set_double_window_textures
     );
     } else {
-        skyline::install_hooks!(
-            full_swapchain_flush,
-        );
+        skyline::install_hook!(full_swapchain_flush);
         install_buffer_impl(config.enable_triple_buffer);
     }
 }
