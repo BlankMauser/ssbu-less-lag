@@ -1,23 +1,26 @@
 use core::{ffi::c_void, mem::MaybeUninit, ptr};
 use core::sync::atomic::{AtomicBool, Ordering};
+use skyline::libc;
 use skyline::nn::{
     os::{self, SleepThread},
     ro, TimeSpan,
 };
+use skyline::nro::NroInfo;
 
 type U32Fn = extern "C" fn() -> u32;
 pub const VERY_LONG_TIMEOUT_MS: u32 = 15 * 60 * 1000;
 pub const POST_HOOK_LOOKUP_DELAY_MS: u32 = 10;
-const HANDSHAKE_STACK_SIZE: usize = 0x4000;
-const HANDSHAKE_THREAD_PRIO: i32 = 16;
-
-#[repr(align(16))]
-struct AlignedStack([u8; HANDSHAKE_STACK_SIZE]);
+const HANDSHAKE_STACK_ALIGN: usize = 0x1000; // page-aligned stack backing
+const HANDSHAKE_STACK_SIZE: usize = 0x10000; // 64 KiB
+const HANDSHAKE_THREAD_PRIO: i32 = 0x2C;
 
 static HANDSHAKE_STARTED: AtomicBool = AtomicBool::new(false);
 static HANDSHAKE_FINISHED: AtomicBool = AtomicBool::new(false);
+static HANDSHAKE_EVENT_READY: AtomicBool = AtomicBool::new(false);
+static HANDSHAKE_TRIGGERED: AtomicBool = AtomicBool::new(false);
 static mut HANDSHAKE_THREAD: MaybeUninit<os::ThreadType> = MaybeUninit::uninit();
-static mut HANDSHAKE_STACK: AlignedStack = AlignedStack([0; HANDSHAKE_STACK_SIZE]);
+static mut HANDSHAKE_EVENT: MaybeUninit<os::EventType> = MaybeUninit::uninit();
+static mut HANDSHAKE_STACK_PTR: *mut c_void = ptr::null_mut();
 static mut HANDSHAKE_INSTALL: Option<unsafe fn()> = None;
 static mut HANDSHAKE_LOG: Option<fn(&'static str)> = None;
 
@@ -120,7 +123,46 @@ fn sleep_ms(ms: u32) {
     }
 }
 
+fn initialize_event_once() -> bool {
+    if HANDSHAKE_EVENT_READY.load(Ordering::Acquire) {
+        return true;
+    }
+
+    unsafe {
+        HANDSHAKE_EVENT.write(core::mem::zeroed());
+        os::InitializeEvent(
+            HANDSHAKE_EVENT.as_mut_ptr(),
+            false,
+            os::EventClearMode_EventClearMode_ManualClear,
+        );
+    }
+
+    HANDSHAKE_EVENT_READY.store(true, Ordering::Release);
+    true
+}
+
+pub fn notify_common_nro_load(info: &NroInfo) {
+    if info.name != "common" {
+        return;
+    }
+    signal_common_loaded_event();
+}
+
+pub fn signal_common_loaded_event() {
+    HANDSHAKE_TRIGGERED.store(true, Ordering::Release);
+    if HANDSHAKE_EVENT_READY.load(Ordering::Acquire) {
+        unsafe {
+            os::SignalEvent(HANDSHAKE_EVENT.as_mut_ptr());
+        }
+    }
+}
+
 extern "C" fn handshake_thread_main(_arg: *mut c_void) {
+    if !HANDSHAKE_TRIGGERED.load(Ordering::Acquire) {
+        unsafe {
+            os::WaitEvent(HANDSHAKE_EVENT.as_mut_ptr());
+        }
+    }
     sleep_ms(POST_HOOK_LOOKUP_DELAY_MS);
 
     let install = unsafe { HANDSHAKE_INSTALL };
@@ -156,6 +198,10 @@ extern "C" fn handshake_thread_main(_arg: *mut c_void) {
 }
 
 fn start_handshake_thread() -> bool {
+    if !initialize_event_once() {
+        return false;
+    }
+
     if HANDSHAKE_STARTED
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_err()
@@ -166,7 +212,16 @@ fn start_handshake_thread() -> bool {
     unsafe {
         HANDSHAKE_THREAD.write(os::ThreadType::new());
         let thread = HANDSHAKE_THREAD.as_mut_ptr();
-        let stack = HANDSHAKE_STACK.0.as_mut_ptr();
+        HANDSHAKE_STACK_PTR = libc::memalign(HANDSHAKE_STACK_ALIGN, HANDSHAKE_STACK_SIZE);
+        if HANDSHAKE_STACK_PTR.is_null() {
+            HANDSHAKE_INSTALL = None;
+            HANDSHAKE_LOG = None;
+            HANDSHAKE_STARTED.store(false, Ordering::Release);
+            return false;
+        }
+
+        // CreateThread expects the base (lowest address) of the stack region.
+        let stack = HANDSHAKE_STACK_PTR as *mut u8;
         let rc = os::CreateThread(
             thread,
             handshake_thread_main,
@@ -177,6 +232,10 @@ fn start_handshake_thread() -> bool {
         );
 
         if rc != 0 {
+            libc::free(HANDSHAKE_STACK_PTR);
+            HANDSHAKE_STACK_PTR = ptr::null_mut();
+            HANDSHAKE_INSTALL = None;
+            HANDSHAKE_LOG = None;
             HANDSHAKE_STARTED.store(false, Ordering::Release);
             return false;
         }
@@ -196,11 +255,19 @@ pub fn cleanup_handshake_thread() -> bool {
         let thread = HANDSHAKE_THREAD.as_mut_ptr();
         os::WaitThread(thread);
         os::DestroyThread(thread);
+        if HANDSHAKE_EVENT_READY.load(Ordering::Acquire) {
+            os::ClearEvent(HANDSHAKE_EVENT.as_mut_ptr());
+        }
+        if !HANDSHAKE_STACK_PTR.is_null() {
+            libc::free(HANDSHAKE_STACK_PTR);
+            HANDSHAKE_STACK_PTR = ptr::null_mut();
+        }
         HANDSHAKE_INSTALL = None;
         HANDSHAKE_LOG = None;
     }
 
     HANDSHAKE_FINISHED.store(false, Ordering::Release);
+    HANDSHAKE_TRIGGERED.store(false, Ordering::Release);
     HANDSHAKE_STARTED.store(false, Ordering::Release);
     true
 }
@@ -220,11 +287,16 @@ pub fn spawn_disable_handshake(
 
 // Example use from another plugin:
 //
-// fn disable_ssbusync_hook(info: &skyline::nro::NroInfo) {
+// fn on_nro_load(info: &skyline::nro::NroInfo) {
 //     if info.name != "common" {
 //         return;
 //     }
 //
+//     // Hook path only signals event; no LookupSymbol work here.
+//     ssbusync::compatibility::notify_common_nro_load(info);
+// }
+//
+// fn plugin_startup() {
 //     unsafe fn install() {
 //         ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
 //     }
