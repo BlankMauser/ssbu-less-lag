@@ -2,6 +2,7 @@ use skyline::nn::{os::SleepThread, ro, TimeSpan};
 
 type U32Fn = extern "C" fn() -> u32;
 pub const VERY_LONG_TIMEOUT_MS: u32 = 15 * 60 * 1000;
+pub const POST_HOOK_LOOKUP_DELAY_MS: u32 = 10;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisableResult {
@@ -92,6 +93,32 @@ pub fn wait_for_common() -> WaitResult {
     }
 }
 
+fn sleep_ms(ms: u32) {
+    for _ in 0..ms {
+        unsafe {
+            SleepThread(TimeSpan {
+                nanoseconds: 1_000_000, // 1ms
+            });
+        }
+    }
+}
+
+// Hook-safe helper: defer symbol lookup until after the NRO callback unwinds.
+// This avoids recursive loader behavior when called directly inside an nro hook.
+pub fn spawn_disable_handshake(install_custom_ssbusync: fn()) {
+    std::thread::spawn(move || {
+        sleep_ms(POST_HOOK_LOOKUP_DELAY_MS);
+
+        match try_disable_ssbusync() {
+            DisableResult::Disabled | DisableResult::NotPresent => {
+                let _ = wait_for_common();
+                install_custom_ssbusync();
+            }
+            DisableResult::TooLate => {}
+        }
+    });
+}
+
 // Example use from another plugin:
 //
 // fn on_nro_load(info: &skyline::nro::NroInfo) {
@@ -99,14 +126,5 @@ pub fn wait_for_common() -> WaitResult {
 //         return;
 //     }
 //
-//     match ssbusync::compatibility::try_disable_ssbusync() {
-//         ssbusync::compatibility::DisableResult::Disabled
-//         | ssbusync::compatibility::DisableResult::NotPresent => {
-//             let _ = ssbusync::compatibility::wait_for_common();
-//             my_plugin_install_custom_ssbusync();
-//         }
-//         ssbusync::compatibility::DisableResult::TooLate => {
-//             // ssbusync already took over; skip custom install.
-//         }
-//     }
+//     ssbusync::compatibility::spawn_disable_handshake(my_plugin_install_custom_ssbusync);
 // }
