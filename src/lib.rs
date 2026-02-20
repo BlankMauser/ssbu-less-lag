@@ -110,13 +110,13 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
 
 pub fn Enable_Double_Buffer() {
     if !is_emulator() {
-        swapchain::enable_double_buffer();
+        unsafe { swapchain::enable_double_buffer(); }
     }
 }
 
 pub fn Enable_Triple_Buffer() {
     if !is_emulator() {
-        swapchain::enable_triple_buffer();
+        unsafe { swapchain::enable_triple_buffer(); }
     }
 }
 

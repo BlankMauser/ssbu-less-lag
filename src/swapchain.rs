@@ -1,5 +1,24 @@
 use crate::sequencing;
 use super::*;
+use core::sync::atomic::{AtomicU64, Ordering};
+
+static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
+
+#[inline(always)]
+unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb80)
+        .cast::<extern "C" fn(u64, i32)>();
+    func_ptr(window_target, count);
+}
+
+#[inline(always)]
+unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
+    let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
+    WINDOW_TARGET.store(window_target, Ordering::Release);
+    window_target
+}
 
 /** Ultimate Render Pipeline Docs
  * Ultimate makes use of multi-threaded rendering, and does so very poorly.
@@ -207,21 +226,15 @@ fn patch_render_sync_wait() {
 // Can be called at runtime. Set to 2 = double buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
-    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-        .cast::<u8>()
-        .add(0x593fb80)
-        .cast::<extern "C" fn(u64, i32)>();
-    func_ptr(*((ctx.registers[23].x() + 0x10) as *const u64), 2);
+    let window_target = cache_window_target_from_ctx(ctx);
+    set_window_textures_impl(window_target, 2);
 }
 
 // Set to 3 = triple buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_triple_window_textures(ctx: &skyline::hooks::InlineCtx) {
-    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-        .cast::<u8>()
-        .add(0x593fb80)
-        .cast::<extern "C" fn(u64, i32)>();
-    func_ptr(*((ctx.registers[23].x() + 0x10) as *const u64), 3);
+    let window_target = cache_window_target_from_ctx(ctx);
+    set_window_textures_impl(window_target, 3);
 }
 
 fn install_buffer_impl(triple: bool) {
@@ -238,12 +251,33 @@ fn install_buffer_impl(triple: bool) {
     }
 }
 
-pub fn enable_double_buffer() {
+pub unsafe fn enable_double_buffer() {
     install_buffer_impl(false);
+    let _ = apply_double_window_textures_now();
 }
 
-pub fn enable_triple_buffer() {
+pub unsafe fn enable_triple_buffer() {
     install_buffer_impl(true);
+    let _ = apply_triple_window_textures_now();
+}
+
+// Runtime callable path: apply the current texture count if a window target has been seen.
+pub unsafe fn apply_double_window_textures_now() -> bool {
+    let window_target = WINDOW_TARGET.load(Ordering::Acquire);
+    if window_target == 0 {
+        return false;
+    }
+    set_window_textures_impl(window_target, 2);
+    true
+}
+
+pub unsafe fn apply_triple_window_textures_now() -> bool {
+    let window_target = WINDOW_TARGET.load(Ordering::Acquire);
+    if window_target == 0 {
+        return false;
+    }
+    set_window_textures_impl(window_target, 3);
+    true
 }
 
 pub fn install(config: SsbuSyncConfig) {
