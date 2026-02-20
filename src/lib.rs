@@ -62,7 +62,7 @@ const STATE_INSTALLING: u8 = 1;
 const STATE_INSTALLED: u8 = 2;
 const STATE_DISABLED: u8 = 3;
 
-#[no_mangle]
+#[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
     if enabled == 0 {
         let _ = ssbusync_request_disable();
@@ -77,7 +77,7 @@ pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
     try_install_if_ready();
 }
 
-#[no_mangle]
+#[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_is_enabled() -> u32 {
     ENABLED.load(Ordering::Acquire) as u32
 }
@@ -94,19 +94,19 @@ pub fn is_common_loaded() -> bool {
     COMMON_LOADED.load(Ordering::Acquire)
 }
 
-#[no_mangle]
+#[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_is_common_loaded() -> u32 {
     is_common_loaded() as u32
 }
 
-#[no_mangle]
+#[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_wait_for_common() {
     while !COMMON_LOADED.load(Ordering::Acquire) {
         unsafe { skyline::nn::os::SleepThread(WAIT_SLICE); }
     }
 }
 
-#[no_mangle]
+#[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_state() -> u32 {
     INSTALL_STATE.load(Ordering::Acquire) as u32
 }
@@ -114,7 +114,7 @@ pub extern "C" fn ssbusync_state() -> u32 {
 // Returns:
 // 1 => ssbusync disabled before install (safe for external plugin to install)
 // 0 => too late, install already started or completed
-#[no_mangle]
+#[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_request_disable() -> u32 {
     ENABLED.store(false, Ordering::Release);
     match INSTALL_STATE.compare_exchange(
