@@ -194,7 +194,7 @@ fn use_current_frame_index() {
 
 // FRAMES IN FLIGHT MANAGEMENT:
 // SSBU is triple buffered. Sets render target index to 2 past freshly acquired texture normally.
-// This patches it to +1 modulo 2 instead of +2.
+// This patches it to +1 modulo 2 instead of +2 Modulo 3.
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
@@ -202,7 +202,7 @@ fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 2);
+    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
