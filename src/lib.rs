@@ -52,6 +52,7 @@ unsafe extern "C" {
 static ENABLED: AtomicBool = AtomicBool::new(true);
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 static NRO_HOOK_REGISTERED: AtomicBool = AtomicBool::new(false);
+static DISABLER_REGISTERED: AtomicBool = AtomicBool::new(false);
 const BARRIER_MODULE_NAME: &str = "common";
 
 #[cfg_attr(feature = "nro-entry", no_mangle)]
@@ -69,11 +70,27 @@ pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_request_disable() -> u32 {
     ENABLED.store(false, Ordering::Release);
+    DISABLER_REGISTERED.store(true, Ordering::Release);
     if INSTALLED.load(Ordering::Acquire) {
         println!("[ssbusync] request_disable too late (already installed)");
         0
     } else {
         println!("[ssbusync] request_disable accepted (will skip on common)");
+        1
+    }
+}
+
+// External disabler handshake for cross-NRO consumers.
+// Returns 1 if accepted before install, 0 if already installed.
+#[cfg_attr(feature = "nro-entry", no_mangle)]
+pub extern "C" fn ssbusync_register_disabler() -> u32 {
+    DISABLER_REGISTERED.store(true, Ordering::Release);
+    ENABLED.store(false, Ordering::Release);
+    if INSTALLED.load(Ordering::Acquire) {
+        println!("[ssbusync] register_disabler too late (already installed)");
+        0
+    } else {
+        println!("[ssbusync] register_disabler accepted (will skip on common)");
         1
     }
 }
@@ -121,6 +138,11 @@ pub fn Enable_Triple_Buffer() {
 }
 
 fn try_install_once() {
+    if DISABLER_REGISTERED.load(Ordering::Acquire) {
+        println!("[ssbusync] disabler registered; skipping install");
+        return;
+    }
+
     if !ENABLED.load(Ordering::Acquire) {
         println!("[ssbusync] disabled; skipping install");
         return;

@@ -3,6 +3,8 @@ use skyline::nn::ro;
 use skyline::nro::NroInfo;
 
 type SetEnabledFn = extern "C" fn(u32);
+type RequestDisableFn = extern "C" fn() -> u32;
+type RegisterDisablerFn = extern "C" fn() -> u32;
 
 #[repr(C)]
 struct Mod0Header {
@@ -78,7 +80,8 @@ pub enum CacheStatus {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DisableResult {
     Disabled,
-    NotCached,
+    Indeterminate,
+    NotAvailable,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +107,12 @@ impl OverrideState {
 }
 
 pub static SSBUSYNC_SET_ENABLED_CACHE: ExportCache = ExportCache::new();
+pub static SSBUSYNC_REQUEST_DISABLE_CACHE: ExportCache = ExportCache::new();
+pub static SSBUSYNC_REGISTER_DISABLER_CACHE: ExportCache = ExportCache::new();
+
+const SSBUSYNC_SET_ENABLED_SYM: &[u8] = b"ssbusync_set_enabled\0";
+const SSBUSYNC_REQUEST_DISABLE_SYM: &[u8] = b"ssbusync_request_disable\0";
+const SSBUSYNC_REGISTER_DISABLER_SYM: &[u8] = b"ssbusync_register_disabler\0";
 
 unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
     let mut i = 0usize;
@@ -128,6 +137,12 @@ unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
 // Resolves `sym_nul` directly from module image without nn::ro::Lookup* calls.
 // `sym_nul` must be null-terminated, e.g. b"ssbusync_set_enabled\0".
 pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
+    // Prefer RO's resolver first; it is robust to layout variations.
+    let mut out = 0usize;
+    if ro::LookupModuleSymbol(&mut out, module as *const ro::Module, sym_nul.as_ptr()) == 0 && out != 0 {
+        return Some(out);
+    }
+
     let base = module.NroPtr as *const u8;
     if base.is_null() {
         return None;
@@ -185,7 +200,7 @@ pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usiz
     None
 }
 
-pub fn observe_and_cache_export(
+pub unsafe fn observe_and_cache_export(
     info: &NroInfo,
     module_name: &str,
     symbol_nul: &'static [u8],
@@ -210,13 +225,60 @@ pub fn observe_and_cache_export(
     }
 }
 
-pub fn observe_ssbusync_set_enabled(info: &NroInfo) -> CacheStatus {
+pub unsafe fn observe_ssbusync_set_enabled(info: &NroInfo) -> CacheStatus {
     observe_and_cache_export(
         info,
         "ssbusync",
-        b"ssbusync_set_enabled\0",
+        SSBUSYNC_SET_ENABLED_SYM,
         &SSBUSYNC_SET_ENABLED_CACHE,
     )
+}
+
+pub unsafe fn observe_ssbusync_request_disable(info: &NroInfo) -> CacheStatus {
+    observe_and_cache_export(
+        info,
+        "ssbusync",
+        SSBUSYNC_REQUEST_DISABLE_SYM,
+        &SSBUSYNC_REQUEST_DISABLE_CACHE,
+    )
+}
+
+pub unsafe fn observe_ssbusync_register_disabler(info: &NroInfo) -> CacheStatus {
+    observe_and_cache_export(
+        info,
+        "ssbusync",
+        SSBUSYNC_REGISTER_DISABLER_SYM,
+        &SSBUSYNC_REGISTER_DISABLER_CACHE,
+    )
+}
+
+pub unsafe fn try_cache_ssbusync_exports_global() -> bool {
+    unsafe {
+        if SSBUSYNC_REGISTER_DISABLER_CACHE.get().is_none() {
+            let mut addr = 0usize;
+            if ro::LookupSymbol(&mut addr, SSBUSYNC_REGISTER_DISABLER_SYM.as_ptr()) == 0 && addr != 0 {
+                SSBUSYNC_REGISTER_DISABLER_CACHE.set(addr);
+            }
+        }
+
+        if SSBUSYNC_REQUEST_DISABLE_CACHE.get().is_none() {
+            let mut addr = 0usize;
+            if ro::LookupSymbol(&mut addr, SSBUSYNC_REQUEST_DISABLE_SYM.as_ptr()) == 0 && addr != 0 {
+                SSBUSYNC_REQUEST_DISABLE_CACHE.set(addr);
+            }
+        }
+
+        if SSBUSYNC_SET_ENABLED_CACHE.get().is_none() {
+            let mut addr = 0usize;
+            if ro::LookupSymbol(&mut addr, SSBUSYNC_SET_ENABLED_SYM.as_ptr()) == 0 && addr != 0 {
+                SSBUSYNC_SET_ENABLED_CACHE.set(addr);
+            }
+        }
+    }
+
+    SSBUSYNC_REGISTER_DISABLER_CACHE.get().is_some()
+        || SSBUSYNC_REQUEST_DISABLE_CACHE.get().is_some()
+        || SSBUSYNC_SET_ENABLED_CACHE.get().is_some()
 }
 
 pub fn call_cached_set_enabled(cache: &ExportCache, enabled: bool) -> bool {
@@ -224,47 +286,111 @@ pub fn call_cached_set_enabled(cache: &ExportCache, enabled: bool) -> bool {
         return false;
     };
 
-    let func: SetEnabledFn = unsafe { core::mem::transmute(addr) };
-    func(enabled as u32);
-    true
+    let func: Option<SetEnabledFn> = unsafe { core::mem::transmute(addr) };
+    if let Some(func) = func {
+        func(enabled as u32);
+        return true;
+    }
+
+    false
+}
+
+pub fn call_cached_request_disable(cache: &ExportCache) -> Option<u32> {
+    let Some(addr) = cache.get() else {
+        return None;
+    };
+
+    let func: Option<RequestDisableFn> = unsafe { core::mem::transmute(addr) };
+    func.map(|f| f())
+}
+
+pub fn call_cached_register_disabler(cache: &ExportCache) -> Option<u32> {
+    let Some(addr) = cache.get() else {
+        return None;
+    };
+
+    let func: Option<RegisterDisablerFn> = unsafe { core::mem::transmute(addr) };
+    func.map(|f| f())
 }
 
 pub fn disable_ssbusync_if_cached() -> DisableResult {
-    if call_cached_set_enabled(&SSBUSYNC_SET_ENABLED_CACHE, false) {
-        DisableResult::Disabled
-    } else {
-        DisableResult::NotCached
+    if let Some(result) = call_cached_register_disabler(&SSBUSYNC_REGISTER_DISABLER_CACHE) {
+        if result != 0 {
+            return DisableResult::Disabled;
+        }
+        return DisableResult::Indeterminate;
     }
+
+    if let Some(result) = call_cached_request_disable(&SSBUSYNC_REQUEST_DISABLE_CACHE) {
+        if result != 0 {
+            return DisableResult::Disabled;
+        }
+        return DisableResult::Indeterminate;
+    }
+
+    // Older builds may not export request_disable; this remains best-effort only.
+    if call_cached_set_enabled(&SSBUSYNC_SET_ENABLED_CACHE, false) {
+        return DisableResult::Indeterminate;
+    }
+
+    DisableResult::NotAvailable
 }
 
 // High-level hook helper with built-in logging for the three common cases:
 // 1) ssbusync exists, no disablers
 // 2) ssbusync exists, disabler called disable
 // 3) ssbusync not present, custom install should proceed
-pub fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideState) -> OverrideAction {
+pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideState) -> OverrideAction {
     if state.decided {
         return OverrideAction::None;
     }
 
     if info.name == "ssbusync" {
         state.saw_ssbusync = true;
-        match observe_ssbusync_set_enabled(info) {
-            CacheStatus::Cached => {
-                if disable_ssbusync_if_cached() == DisableResult::Disabled {
-                    state.did_disable = true;
-                    println!("[ssbusync-compat] ssbusync exists: disabled.");
+        let set_status = observe_ssbusync_set_enabled(info);
+        let req_status = observe_ssbusync_request_disable(info);
+        let reg_status = observe_ssbusync_register_disabler(info);
+        match disable_ssbusync_if_cached() {
+            DisableResult::Disabled => {
+                state.did_disable = true;
+                println!("[ssbusync-compat] ssbusync exists: disable accepted.");
+            }
+            DisableResult::Indeterminate => {
+                println!(
+                    "[ssbusync-compat] ssbusync detected, but disable was late/indeterminate; skipping custom install."
+                );
+            }
+            DisableResult::NotAvailable => {
+                if set_status == CacheStatus::Missing
+                    || req_status == CacheStatus::Missing
+                    || reg_status == CacheStatus::Missing
+                {
+                    println!("[ssbusync-compat] ssbusync loaded, but expected exports are missing.");
                 }
             }
-            CacheStatus::Missing => {
-                println!("[ssbusync-compat] ssbusync loaded, but ssbusync_set_enabled export missing.");
-            }
-            CacheStatus::Ignored => {}
         }
         return OverrideAction::None;
     }
 
     if info.name != "common" {
         return OverrideAction::None;
+    }
+
+    // If we missed ssbusync's own load callback due to load order, do a late global lookup.
+    if !state.saw_ssbusync && try_cache_ssbusync_exports_global() {
+        state.saw_ssbusync = true;
+        match disable_ssbusync_if_cached() {
+            DisableResult::Disabled => {
+                state.did_disable = true;
+                println!("[ssbusync-compat] ssbusync found late: disable accepted.");
+            }
+            DisableResult::Indeterminate => {
+                println!(
+                    "[ssbusync-compat] ssbusync found late, but disable was late/indeterminate; skipping custom install."
+                );
+            }
+            DisableResult::NotAvailable => {}
+        }
     }
 
     state.decided = true;
@@ -282,10 +408,29 @@ pub fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideState) ->
     }
 }
 
-// Example (threadless, NRO-hook driven, covers all 3 combinations):
+// Recommended disabler flow:
+//
+// 1) Register exactly one NRO load hook in your plugin startup.
+// 2) Do an immediate global lookup + disable attempt in startup.
+// 3) Send every NRO event to observe_and_decide_override(...).
+// 4) Only install custom path if action == InstallCustom.
+//
+// Safety notes:
+// - on_nro_load runs for every NRO, but this helper ignores unrelated module names.
+// - state.decided ensures the decision is only taken once.
+// - Your own custom install should also be one-shot guarded.
 //
 // static mut OVERRIDE_STATE: ssbusync::compatibility::OverrideState =
 //     ssbusync::compatibility::OverrideState::new();
+// static mut CUSTOM_INSTALLED: bool = false;
+//
+// fn compat_init() {
+//     if ssbusync::compatibility::try_cache_ssbusync_exports_global() {
+//         let _ = ssbusync::compatibility::disable_ssbusync_if_cached();
+//     }
+//
+//     skyline::nro::add_hook(on_nro_load).expect("nro hook unavailable");
+// }
 //
 // fn on_nro_load(info: &skyline::nro::NroInfo) {
 //     let action = unsafe {
@@ -293,9 +438,12 @@ pub fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideState) ->
 //     };
 //
 //     if action == ssbusync::compatibility::OverrideAction::InstallCustom {
-//         println!("[my-plugin] installing custom ssbusync path");
 //         unsafe {
-//             ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
+//             if !CUSTOM_INSTALLED {
+//                 CUSTOM_INSTALLED = true;
+//                 println!("[my-plugin] installing custom ssbusync path");
+//                 ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default());
+//             }
 //         }
 //     }
 // }
