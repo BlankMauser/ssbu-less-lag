@@ -202,7 +202,7 @@ fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 3);
+    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
@@ -262,11 +262,13 @@ fn install_buffer_impl(triple: bool) {
 pub unsafe fn enable_double_buffer() {
     install_buffer_impl(false);
     let _ = apply_double_window_textures_now();
+    patch_render_sync_wait();
 }
 
 pub unsafe fn enable_triple_buffer() {
     install_buffer_impl(true);
     let _ = apply_triple_window_textures_now();
+    restore_render_sync_wait();
 }
 
 // Runtime callable path: apply the current texture count if a window target has been seen.
