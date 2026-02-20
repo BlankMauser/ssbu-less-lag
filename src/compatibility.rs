@@ -13,9 +13,10 @@ unsafe fn hdr_sync_disable() -> bool {
         let f: extern "C" fn() -> u32 = core::mem::transmute(addr);
         return f() != 0;
     }
-    // Fallback: mere presence
-    symbol_exists(b"hdr_disable_ssbusync\0")
+    return symbol_exists(b"hdr_disable_ssbusync\0")
 }
+
+
 
 pub unsafe fn disablers() -> bool {
     return hdr_sync_disable();

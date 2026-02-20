@@ -4,9 +4,11 @@ mod pacer;
 mod profiling;
 mod sequencing;
 mod swapchain;
+use skyline::nro::{self, NroInfo};
 //mod vsync;
 mod vsync_history;
 mod compatibility;
+
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
@@ -76,17 +78,27 @@ pub fn Enable_Triple_Buffer() {
     }
 }
 
+fn on_nro_load(info: &NroInfo) {
+    if info.name == "common" {
+        unsafe {
+            if compatibility::disablers() {
+                println!("[ssbusync] Disabler detected -> not installing hooks. \n");
+                return;
+            }
+        }
+        println!("[ssbusync] No disablers detected. \n");
+        Install_SSBU_Sync(SsbuSyncConfig::default());
+    }
+}
+
 #[cfg(feature = "nro-entry")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
-    unsafe {
-        if compatibility::disablers() {
-            println!("[ssbusync] Disabler detected -> not installing hooks. \n");
-            return;
+    match nro::add_hook(on_nro_load) {
+        Ok(()) => println!("[ssbusync] nro hook registered."),
+        Err(_) => {
+            println!("[ssbusync] nro hook missing; falling back (no auto-detect).");
+            unsafe { Install_SSBU_Sync(SsbuSyncConfig::default()); }
         }
     }
-    println!("[ssbusync] No disablers detected. \n");
-    Install_SSBU_Sync(SsbuSyncConfig::default());
-    // profiling::setup();
-    // sequencing::install();
 }

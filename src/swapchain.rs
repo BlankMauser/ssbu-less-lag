@@ -270,6 +270,5 @@ pub fn install(config: SsbuSyncConfig) {
             full_swapchain_flush,
         );
         install_buffer_impl(config.enable_triple_buffer);
-        
     }
 }
