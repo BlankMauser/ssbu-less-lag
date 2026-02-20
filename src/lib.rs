@@ -6,6 +6,7 @@ mod sequencing;
 mod swapchain;
 //mod vsync;
 mod vsync_history;
+mod compatibility;
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
@@ -76,6 +77,12 @@ pub fn Enable_Triple_Buffer() {
 #[cfg(feature = "nro-entry")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
+    unsafe {
+        if compatibility::disablers() {
+            println!("[ssbusync] Disabler detected -> not installing hooks.");
+            return;
+        }
+    }
     Install_SSBU_Sync(SsbuSyncConfig::default());
     // profiling::setup();
     // sequencing::install();
