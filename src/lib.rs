@@ -8,6 +8,7 @@ mod sequencing;
 mod swapchain;
 //mod vsync;
 mod vsync_history;
+pub mod render;
 pub mod compatibility;
 
 #[derive(Debug, Clone, Copy)]
@@ -53,7 +54,7 @@ static ENABLED: AtomicBool = AtomicBool::new(true);
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 static NRO_HOOK_REGISTERED: AtomicBool = AtomicBool::new(false);
 static DISABLER_REGISTERED: AtomicBool = AtomicBool::new(false);
-const BARRIER_MODULE_NAME: &str = "common";
+const BARRIER_MODULE_NAME: &str = "unknown";
 
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
@@ -101,7 +102,7 @@ pub extern "C" fn ssbusync_register_disabler() -> u32 {
         0
     } else {
         ENABLED.store(false, Ordering::Release);
-        println!("[ssbusync] register_disabler accepted (will skip on common)");
+        println!("[ssbusync] register_disabler accepted (will skip on unknown)");
         1
     }
 }
@@ -168,7 +169,7 @@ pub fn notify_nro_load(info: &NroInfo) {
         return;
     }
 
-    println!("[ssbusync] common loaded -> evaluating install");
+    println!("[ssbusync] unknown loaded -> evaluating install");
     try_install_once();
 }
 

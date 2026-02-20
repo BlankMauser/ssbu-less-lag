@@ -138,7 +138,6 @@ unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
 // Resolves `sym_nul` directly from module image without nn::ro::Lookup* calls.
 // `sym_nul` must be null-terminated, e.g. b"ssbusync_set_enabled\0".
 pub unsafe fn resolve_export_no_ro(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
-    // DO NOT call ro::LookupModuleSymbol here (re-entrant under nro_hook)
 
     let base = module.NroPtr as *const u8;
     if base.is_null() {
@@ -387,7 +386,7 @@ pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideSt
         return OverrideAction::None;
     }
 
-    if info.name != "common" {
+    if info.name != "unknown" {
         return OverrideAction::None;
     }
 
