@@ -74,7 +74,7 @@ fn try_claim_disabler(source: &str) -> u32 {
         .is_err()
     {
         println!("[ssbusync] {source} rejected (another disabler already claimed)");
-        0
+        1
     } else {
         ENABLED.store(false, Ordering::Release);
         println!("[ssbusync] {source} accepted (will skip install)");

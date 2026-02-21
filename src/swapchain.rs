@@ -3,7 +3,7 @@ use super::*;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
-static SET_WINDOW_HOOK_HITS: AtomicU64 = AtomicU64::new(0);
+//static SET_WINDOW_HOOK_HITS: AtomicU64 = AtomicU64::new(0);
 
 /// Returns the cached NVN window pointer (0 if not yet seen).
 pub(crate) fn window_target() -> u64 {
@@ -37,12 +37,12 @@ unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
     window_target
 }
 
-#[inline(always)]
-fn log_set_window_hook_hit() {
-    let hit = SET_WINDOW_HOOK_HITS.fetch_add(1, Ordering::Relaxed) + 1;
-    skyline::println!("[swapchain] set_window_textures hook hit={}", hit);
+// #[inline(always)]
+// fn log_set_window_hook_hit() {
+//     let hit = SET_WINDOW_HOOK_HITS.fetch_add(1, Ordering::Relaxed) + 1;
+//     skyline::println!("[swapchain] set_window_textures hook hit={}", hit);
     
-}
+// }
 
 /** Ultimate Render Pipeline Docs
  * Ultimate makes use of multi-threaded rendering, and does so very poorly.
@@ -342,10 +342,10 @@ pub fn install(config: SsbuSyncConfig) {
     }
 
     // Seed the render API with the initial buffer mode.
-    let initial = if config.enable_triple_buffer {
-        crate::render::api::BufferMode::Triple
-    } else {
-        crate::render::api::BufferMode::Double
-    };
-    crate::render::api::set_initial_mode(initial);
+    // let initial = if config.enable_triple_buffer {
+    //     crate::render::api::BufferMode::Triple
+    // } else {
+    //     crate::render::api::BufferMode::Double
+    // };
+    // crate::render::api::set_initial_mode(initial);
 }
