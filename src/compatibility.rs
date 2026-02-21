@@ -206,7 +206,9 @@ pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideSt
         match disable_ssbusync_if_cached() {
             DisableResult::Disabled => {
                 state.did_disable = true;
-                println!("[ssbusync-compat] ssbusync exists: disable accepted.");
+                state.decided = true;
+                println!("[ssbusync-compat] ssbusync exists: disable accepted -> install custom.");
+                return OverrideAction::InstallCustom;
             }
             DisableResult::Indeterminate => {
                 println!(
