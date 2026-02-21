@@ -56,6 +56,37 @@ static NRO_HOOK_REGISTERED: AtomicBool = AtomicBool::new(false);
 static DISABLER_REGISTERED: AtomicBool = AtomicBool::new(false);
 const BARRIER_MODULE_NAME: &str = "unknown";
 
+#[cfg(feature = "disabler-symbol")]
+#[no_mangle]
+pub extern "C" fn ssbusync_external_disabler() -> u32 {
+    1
+}
+
+fn try_claim_disabler(source: &str) -> u32 {
+    if INSTALLED.load(Ordering::Acquire) {
+        println!("[ssbusync] {source} too late (already installed)");
+        0
+    } else if DISABLER_REGISTERED
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        println!("[ssbusync] {source} rejected (another disabler already claimed)");
+        0
+    } else {
+        ENABLED.store(false, Ordering::Release);
+        println!("[ssbusync] {source} accepted (will skip install)");
+        1
+    }
+}
+
+fn try_claim_external_symbol_disabler() -> bool {
+    if !compatibility::external_disabler_wants_disable() {
+        return false;
+    }
+
+    try_claim_disabler("external disabler symbol") != 0
+}
+
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
     ENABLED.store(enabled != 0, Ordering::Release);
@@ -71,40 +102,14 @@ pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_request_disable() -> u32 {
     // Legacy API path; keep behavior aligned with register_disabler.
-    if INSTALLED.load(Ordering::Acquire) {
-        println!("[ssbusync] request_disable too late (already installed)");
-        0
-    } else if DISABLER_REGISTERED
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        println!("[ssbusync] request_disable rejected (another disabler already claimed)");
-        0
-    } else {
-        ENABLED.store(false, Ordering::Release);
-        println!("[ssbusync] request_disable accepted (will skip on common)");
-        1
-    }
+    try_claim_disabler("request_disable")
 }
 
 // External disabler handshake for cross-NRO consumers.
 // Returns 1 if accepted before install, 0 if already installed.
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_register_disabler() -> u32 {
-    if INSTALLED.load(Ordering::Acquire) {
-        println!("[ssbusync] register_disabler too late (already installed)");
-        0
-    } else if DISABLER_REGISTERED
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        println!("[ssbusync] register_disabler rejected (another disabler already claimed)");
-        0
-    } else {
-        ENABLED.store(false, Ordering::Release);
-        println!("[ssbusync] register_disabler accepted (will skip on unknown)");
-        1
-    }
+    try_claim_disabler("register_disabler")
 }
 
 #[cfg_attr(feature = "nro-entry", no_mangle)]
@@ -143,6 +148,8 @@ pub fn Enable_Triple_Buffer() {
 }
 
 fn try_install_once() {
+    let _ = try_claim_external_symbol_disabler();
+
     if DISABLER_REGISTERED.load(Ordering::Acquire) {
         println!("[ssbusync] disabler registered; skipping install");
         return;
@@ -174,6 +181,7 @@ pub fn notify_nro_load(info: &NroInfo) {
 }
 
 fn on_nro_load(info: &NroInfo) {
+    let _ = try_claim_external_symbol_disabler();
     notify_nro_load(info);
 }
 
@@ -181,6 +189,8 @@ pub fn register_nro_hook() {
     if NRO_HOOK_REGISTERED.swap(true, Ordering::AcqRel) {
         return;
     }
+
+    let _ = try_claim_external_symbol_disabler();
 
     match nro::add_hook(on_nro_load) {
         Ok(()) => println!("[ssbusync] nro hook registered."),

@@ -1,74 +1,10 @@
-use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use core::sync::atomic::{AtomicBool, Ordering};
 use skyline::nn::ro;
 use skyline::nro::NroInfo;
 
 type SetEnabledFn = extern "C" fn(u32);
 type RequestDisableFn = extern "C" fn() -> u32;
 type RegisterDisablerFn = extern "C" fn() -> u32;
-
-#[repr(C)]
-struct Mod0Header {
-    magic: [u8; 4],
-    dynamic_off: u32,
-    bss_start_off: u32,
-    bss_end_off: u32,
-    eh_frame_hdr_start_off: u32,
-    eh_frame_hdr_end_off: u32,
-    module_runtime_off: u32,
-}
-
-#[repr(C)]
-struct Elf64Dyn {
-    d_tag: i64,
-    d_val: u64,
-}
-
-#[repr(C)]
-struct Elf64Sym {
-    st_name: u32,
-    st_info: u8,
-    st_other: u8,
-    st_shndx: u16,
-    st_value: u64,
-    st_size: u64,
-}
-
-const DT_NULL: i64 = 0;
-const DT_HASH: i64 = 4;
-const DT_STRTAB: i64 = 5;
-const DT_SYMTAB: i64 = 6;
-const DT_STRSZ: i64 = 10;
-
-pub struct ExportCache {
-    addr: AtomicUsize,
-}
-
-impl ExportCache {
-    pub const fn new() -> Self {
-        Self {
-            addr: AtomicUsize::new(0),
-        }
-    }
-
-    pub fn get(&self) -> Option<usize> {
-        let addr = self.addr.load(Ordering::Acquire);
-        if addr == 0 {
-            None
-        } else {
-            Some(addr)
-        }
-    }
-
-    pub fn set(&self, addr: usize) {
-        if addr != 0 {
-            self.addr.store(addr, Ordering::Release);
-        }
-    }
-
-    pub fn clear(&self) {
-        self.addr.store(0, Ordering::Release);
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheStatus {
@@ -106,184 +42,76 @@ impl OverrideState {
     }
 }
 
-pub static SSBUSYNC_SET_ENABLED_CACHE: ExportCache = ExportCache::new();
-pub static SSBUSYNC_REQUEST_DISABLE_CACHE: ExportCache = ExportCache::new();
-pub static SSBUSYNC_REGISTER_DISABLER_CACHE: ExportCache = ExportCache::new();
 pub static CUSTOM_INSTALL_CLAIMED: AtomicBool = AtomicBool::new(false);
 
 const SSBUSYNC_SET_ENABLED_SYM: &[u8] = b"ssbusync_set_enabled\0";
 const SSBUSYNC_REQUEST_DISABLE_SYM: &[u8] = b"ssbusync_request_disable\0";
 const SSBUSYNC_REGISTER_DISABLER_SYM: &[u8] = b"ssbusync_register_disabler\0";
+pub const SSBUSYNC_EXTERNAL_DISABLER_PROBE_SYM: &[u8] = b"ssbusync_external_disabler\0";
 
-unsafe fn cstr_eq(ptr: *const u8, wanted_nul: &[u8]) -> bool {
-    let mut i = 0usize;
-    loop {
-        if i >= wanted_nul.len() {
-            return false;
+fn lookup_symbol_addr(sym_nul: &[u8]) -> Option<usize> {
+    let mut addr = 0usize;
+    unsafe {
+        if ro::LookupSymbol(&mut addr, sym_nul.as_ptr()) == 0 && addr != 0 {
+            Some(addr)
+        } else {
+            None
         }
-
-        let a = *ptr.add(i);
-        let b = wanted_nul[i];
-        if a != b {
-            return false;
-        }
-        if b == 0 {
-            return true;
-        }
-
-        i += 1;
     }
 }
 
-pub unsafe fn resolve_export(module: &ro::Module, sym_nul: &[u8]) -> Option<usize> {
-    let mut out = 0usize;
-    if ro::LookupModuleSymbol(&mut out, module as *const ro::Module, sym_nul.as_ptr()) == 0 && out != 0 {
-        return Some(out);
-    }
-    
-    let base = module.NroPtr as *const u8;
-    if base.is_null() {
-        return None;
-    }
-
-    let nro = &*(base as *const ro::NroHeader);
-    let mod0 = base.add(nro.mod_offset as usize) as *const Mod0Header;
-
-    if (*mod0).magic != *b"MOD0" {
-        return None;
-    }
-
-    // MOD0.dynamic_off is an offset from the MOD0 header to the ELF _DYNAMIC array. :contentReference[oaicite:1]{index=1}
-    let dyn_ptr = (mod0 as *const u8).add((*mod0).dynamic_off as usize) as *const Elf64Dyn;
-
-    let mut symtab: *const Elf64Sym = core::ptr::null();
-    let mut strtab: *const u8 = core::ptr::null();
-    let mut strsz: usize = 0;
-    let mut hash: *const u32 = core::ptr::null();
-
-    // Keep this bounded; 512 is fine.
-    for i in 0..512usize {
-        let d = &*dyn_ptr.add(i);
-        if d.d_tag == DT_NULL {
-            break;
-        }
-
-        match d.d_tag {
-            DT_SYMTAB => symtab = base.add(d.d_val as usize) as *const Elf64Sym,
-            DT_STRTAB => strtab = base.add(d.d_val as usize),
-            DT_STRSZ  => strsz  = d.d_val as usize,
-            DT_HASH   => hash   = base.add(d.d_val as usize) as *const u32,
-            _ => {}
-        }
-    }
-
-    if symtab.is_null() || strtab.is_null() || hash.is_null() || strsz == 0 {
-        return None;
-    }
-
-    let nchain = *hash.add(1) as usize;
-    for i in 0..nchain {
-        let s = &*symtab.add(i);
-        let st_name = s.st_name as usize;
-        if st_name >= strsz {
-            continue;
-        }
-
-        if cstr_eq(strtab.add(st_name), sym_nul) {
-            // ET_DYN-style: st_value is relative to module base.
-            let addr = (base as usize).wrapping_add(s.st_value as usize);
-            if addr != 0 {
-                return Some(addr);
-            }
-        }
-    }
-
-    None
+fn lookup_symbol_exists(sym_nul: &[u8]) -> bool {
+    lookup_symbol_addr(sym_nul).is_some()
 }
 
-pub unsafe fn observe_and_cache_export(
-    info: &NroInfo,
-    module_name: &str,
-    symbol_nul: &'static [u8],
-    cache: &ExportCache,
-) -> CacheStatus {
-    if info.name != module_name {
+pub unsafe fn observe_ssbusync_set_enabled(info: &NroInfo) -> CacheStatus {
+    if info.name != "ssbusync" {
         return CacheStatus::Ignored;
     }
 
-    if cache.get().is_some() {
-        return CacheStatus::Cached;
-    }
-
-    let module = info.module as *const ro::Module;
-    let resolved = unsafe { resolve_export(&*module, symbol_nul) };
-
-    if let Some(addr) = resolved {
-        cache.set(addr);
+    if lookup_symbol_exists(SSBUSYNC_SET_ENABLED_SYM) {
         CacheStatus::Cached
     } else {
         CacheStatus::Missing
     }
 }
 
-pub unsafe fn observe_ssbusync_set_enabled(info: &NroInfo) -> CacheStatus {
-    observe_and_cache_export(
-        info,
-        "ssbusync",
-        SSBUSYNC_SET_ENABLED_SYM,
-        &SSBUSYNC_SET_ENABLED_CACHE,
-    )
-}
-
 pub unsafe fn observe_ssbusync_request_disable(info: &NroInfo) -> CacheStatus {
-    observe_and_cache_export(
-        info,
-        "ssbusync",
-        SSBUSYNC_REQUEST_DISABLE_SYM,
-        &SSBUSYNC_REQUEST_DISABLE_CACHE,
-    )
+    if info.name != "ssbusync" {
+        return CacheStatus::Ignored;
+    }
+
+    if lookup_symbol_exists(SSBUSYNC_REQUEST_DISABLE_SYM) {
+        CacheStatus::Cached
+    } else {
+        CacheStatus::Missing
+    }
 }
 
 pub unsafe fn observe_ssbusync_register_disabler(info: &NroInfo) -> CacheStatus {
-    observe_and_cache_export(
-        info,
-        "ssbusync",
-        SSBUSYNC_REGISTER_DISABLER_SYM,
-        &SSBUSYNC_REGISTER_DISABLER_CACHE,
-    )
+    if info.name != "ssbusync" {
+        return CacheStatus::Ignored;
+    }
+
+    if lookup_symbol_exists(SSBUSYNC_REGISTER_DISABLER_SYM) {
+        CacheStatus::Cached
+    } else {
+        CacheStatus::Missing
+    }
 }
 
 pub unsafe fn try_cache_ssbusync_exports_global() -> bool {
-    unsafe {
-        if SSBUSYNC_REGISTER_DISABLER_CACHE.get().is_none() {
-            let mut addr = 0usize;
-            if ro::LookupSymbol(&mut addr, SSBUSYNC_REGISTER_DISABLER_SYM.as_ptr()) == 0 && addr != 0 {
-                SSBUSYNC_REGISTER_DISABLER_CACHE.set(addr);
-            }
-        }
-
-        if SSBUSYNC_REQUEST_DISABLE_CACHE.get().is_none() {
-            let mut addr = 0usize;
-            if ro::LookupSymbol(&mut addr, SSBUSYNC_REQUEST_DISABLE_SYM.as_ptr()) == 0 && addr != 0 {
-                SSBUSYNC_REQUEST_DISABLE_CACHE.set(addr);
-            }
-        }
-
-        if SSBUSYNC_SET_ENABLED_CACHE.get().is_none() {
-            let mut addr = 0usize;
-            if ro::LookupSymbol(&mut addr, SSBUSYNC_SET_ENABLED_SYM.as_ptr()) == 0 && addr != 0 {
-                SSBUSYNC_SET_ENABLED_CACHE.set(addr);
-            }
-        }
-    }
-
-    SSBUSYNC_REGISTER_DISABLER_CACHE.get().is_some()
-        || SSBUSYNC_REQUEST_DISABLE_CACHE.get().is_some()
-        || SSBUSYNC_SET_ENABLED_CACHE.get().is_some()
+    lookup_symbol_exists(SSBUSYNC_REGISTER_DISABLER_SYM)
+        || lookup_symbol_exists(SSBUSYNC_REQUEST_DISABLE_SYM)
+        || lookup_symbol_exists(SSBUSYNC_SET_ENABLED_SYM)
 }
 
-pub fn call_cached_set_enabled(cache: &ExportCache, enabled: bool) -> bool {
-    let Some(addr) = cache.get() else {
+pub fn external_disabler_wants_disable() -> bool {
+    lookup_symbol_exists(SSBUSYNC_EXTERNAL_DISABLER_PROBE_SYM)
+}
+
+fn call_lookup_set_enabled(enabled: bool) -> bool {
+    let Some(addr) = lookup_symbol_addr(SSBUSYNC_SET_ENABLED_SYM) else {
         return false;
     };
 
@@ -296,33 +124,27 @@ pub fn call_cached_set_enabled(cache: &ExportCache, enabled: bool) -> bool {
     false
 }
 
-pub fn call_cached_request_disable(cache: &ExportCache) -> Option<u32> {
-    let Some(addr) = cache.get() else {
-        return None;
-    };
-
+fn call_lookup_request_disable() -> Option<u32> {
+    let addr = lookup_symbol_addr(SSBUSYNC_REQUEST_DISABLE_SYM)?;
     let func: Option<RequestDisableFn> = unsafe { core::mem::transmute(addr) };
     func.map(|f| f())
 }
 
-pub fn call_cached_register_disabler(cache: &ExportCache) -> Option<u32> {
-    let Some(addr) = cache.get() else {
-        return None;
-    };
-
+fn call_lookup_register_disabler() -> Option<u32> {
+    let addr = lookup_symbol_addr(SSBUSYNC_REGISTER_DISABLER_SYM)?;
     let func: Option<RegisterDisablerFn> = unsafe { core::mem::transmute(addr) };
     func.map(|f| f())
 }
 
 pub fn disable_ssbusync_if_cached() -> DisableResult {
-    if let Some(result) = call_cached_register_disabler(&SSBUSYNC_REGISTER_DISABLER_CACHE) {
+    if let Some(result) = call_lookup_register_disabler() {
         if result != 0 {
             return DisableResult::Disabled;
         }
         return DisableResult::Indeterminate;
     }
 
-    if let Some(result) = call_cached_request_disable(&SSBUSYNC_REQUEST_DISABLE_CACHE) {
+    if let Some(result) = call_lookup_request_disable() {
         if result != 0 {
             return DisableResult::Disabled;
         }
@@ -330,7 +152,7 @@ pub fn disable_ssbusync_if_cached() -> DisableResult {
     }
 
     // Older builds may not export request_disable; this remains best-effort only.
-    if call_cached_set_enabled(&SSBUSYNC_SET_ENABLED_CACHE, false) {
+    if call_lookup_set_enabled(false) {
         return DisableResult::Indeterminate;
     }
 

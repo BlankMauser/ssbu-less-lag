@@ -30,6 +30,15 @@ This crate can also be installed from another Cargo Skyline plugin.
 ssbusync = { git = "https://github.com/BlankMauser/ssbu-sync", default-features = false }
 ```
 
+To disable "ssbusync.nro" from your own plugin NRO, enable:
+
+```toml
+[dependencies]
+ssbusync = { git = "https://github.com/BlankMauser/ssbu-sync", default-features = false, features = ["disabler-symbol"] }
+```
+
+That feature exports `ssbusync_external_disabler`, which `ssbusync.nro` probes before loading.
+
 Installing hooks from your own `#[skyline::main]`:
 
 ```rust
@@ -38,6 +47,4 @@ cfg.disable_vsync = true;
 cfg.disable_pacer = false;
 ssbusync::install_ssbu_sync(cfg);
 ```
-
-
 

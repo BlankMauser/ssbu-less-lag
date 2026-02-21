@@ -1,3 +1,4 @@
 **/*.nro
 target
+reference
 Cargo.lock

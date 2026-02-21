@@ -9,20 +9,14 @@ pub(crate) fn window_target() -> u64 {
     WINDOW_TARGET.load(Ordering::Acquire)
 }
 
-/// Returns the function pointer for `nvnWindowGetNumActiveTextures`.
-/// Resolved from the game's text section.
+/// Resolved function pointer for `nvnWindowGetNumActiveTextures`.
+/// The game stores resolved NVN procs in its text section:
+///   0x593fb80 = nvnWindowSetNumActiveTextures
+///   0x593fb88 = nvnWindowGetNumActiveTextures
 pub(crate) unsafe fn get_window_num_active_textures_fn() -> unsafe extern "C" fn(*const ()) -> i32 {
-    // nvnWindowGetNumActiveTextures is at a known vtable offset.
-    // We use the same text-relative resolution pattern as set_window_textures_impl.
-    // The function is stored in the NVN proc table; for now we resolve it the
-    // same way the rest of the swapchain code does: via a text-section pointer.
-    //
-    // Offset 0x593fba0 = nvnWindowGetNumActiveTextures
-    // (0x593fb80 is nvnWindowSetNumActiveTextures, +0x20 = Get variant based on
-    //  vtable ordering: Set at slot N, Get at slot N+4 → 4*8=0x20 apart)
     *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
         .cast::<u8>()
-        .add(0x593fba0)
+        .add(0x593fb88)
         .cast::<unsafe extern "C" fn(*const ()) -> i32>()
 }
 

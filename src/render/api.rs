@@ -1,13 +1,13 @@
 use core::sync::atomic::{AtomicU8, Ordering};
 use crate::swapchain;
 
-/// Represents the current swapchain buffer mode.
+/// Current swapchain buffer mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum BufferMode {
-    /// Two active textures — lower latency, may drop frames on heavy scenes.
+    /// lower latency
     Double = 2,
-    /// Three active textures — default SSBU behaviour, higher latency.
+    /// default SSBU behaviour, higher latency.
     Triple = 3,
 }
 
@@ -87,8 +87,6 @@ pub fn set_buffer_mode(mode: BufferMode) -> bool {
 // ── Callbacks ────────────────────────────────────────────────────────
 
 /// Register a callback that fires whenever the buffer mode changes.
-///
-/// Returns `true` if registered, `false` if the callback table is full.
 pub fn on_buffer_mode_change(cb: fn(BufferMode)) -> bool {
     let idx = CALLBACK_COUNT.fetch_add(1, Ordering::AcqRel) as usize;
     if idx >= MAX_CALLBACKS {
@@ -114,8 +112,6 @@ fn fire_callbacks(mode: BufferMode) {
 
 // ── Internal: called by swapchain on first install ───────────────────
 
-/// Called by the swapchain module during `install()` to seed the initial mode
-/// without triggering callbacks (since nothing has "changed" yet).
 pub(crate) fn set_initial_mode(mode: BufferMode) {
     CURRENT_MODE.store(mode as u8, Ordering::Release);
 }
