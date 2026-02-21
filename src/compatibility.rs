@@ -2,10 +2,8 @@ use core::sync::atomic::{AtomicBool, Ordering};
 use skyline::nn::ro;
 use skyline::nro::NroInfo;
 
-type SetEnabledFn = extern "C" fn(u32);
-type RequestDisableFn = extern "C" fn() -> u32;
-type RegisterDisablerFn = extern "C" fn() -> u32;
-type IsEnabledFn = extern "C" fn() -> u32;
+type RegisterDisablerFn = unsafe extern "C" fn() -> u32;
+type IsEnabledFn = unsafe extern "C" fn() -> u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheStatus {
@@ -45,16 +43,15 @@ impl OverrideState {
 
 pub static CUSTOM_INSTALL_CLAIMED: AtomicBool = AtomicBool::new(false);
 
-const SSBUSYNC_SET_ENABLED_SYM: &[u8] = b"ssbusync_set_enabled\0";
-const SSBUSYNC_REQUEST_DISABLE_SYM: &[u8] = b"ssbusync_request_disable\0";
 const SSBUSYNC_REGISTER_DISABLER_SYM: &[u8] = b"ssbusync_register_disabler\0";
 const SSBUSYNC_IS_ENABLED_SYM: &[u8] = b"ssbusync_is_enabled\0";
+// Exported by a plugin that is NOT ssbusync.nro. If present, ssbusync.nro disables itself.
 pub const SSBUSYNC_EXTERNAL_DISABLER_PROBE_SYM: &[u8] = b"ssbusync_external_disabler\0";
 
 fn lookup_symbol_addr(sym_nul: &[u8]) -> Option<usize> {
     let mut addr = 0usize;
     unsafe {
-        if ro::LookupSymbol(&mut addr, sym_nul.as_ptr()) == 0 && addr != 0 {
+        if ro::LookupSymbol(&mut addr, sym_nul.as_ptr()) == 0 {
             Some(addr)
         } else {
             None
@@ -63,31 +60,7 @@ fn lookup_symbol_addr(sym_nul: &[u8]) -> Option<usize> {
 }
 
 fn lookup_symbol_exists(sym_nul: &[u8]) -> bool {
-    lookup_symbol_addr(sym_nul).is_some()
-}
-
-pub unsafe fn observe_ssbusync_set_enabled(info: &NroInfo) -> CacheStatus {
-    if info.name != "ssbusync" {
-        return CacheStatus::Ignored;
-    }
-
-    if lookup_symbol_exists(SSBUSYNC_SET_ENABLED_SYM) {
-        CacheStatus::Cached
-    } else {
-        CacheStatus::Missing
-    }
-}
-
-pub unsafe fn observe_ssbusync_request_disable(info: &NroInfo) -> CacheStatus {
-    if info.name != "ssbusync" {
-        return CacheStatus::Ignored;
-    }
-
-    if lookup_symbol_exists(SSBUSYNC_REQUEST_DISABLE_SYM) {
-        CacheStatus::Cached
-    } else {
-        CacheStatus::Missing
-    }
+    matches!(lookup_symbol_addr(sym_nul), Some(addr) if addr != 0)
 }
 
 pub unsafe fn observe_ssbusync_register_disabler(info: &NroInfo) -> CacheStatus {
@@ -104,44 +77,23 @@ pub unsafe fn observe_ssbusync_register_disabler(info: &NroInfo) -> CacheStatus 
 
 pub unsafe fn try_cache_ssbusync_exports_global() -> bool {
     lookup_symbol_exists(SSBUSYNC_REGISTER_DISABLER_SYM)
-        || lookup_symbol_exists(SSBUSYNC_REQUEST_DISABLE_SYM)
-        || lookup_symbol_exists(SSBUSYNC_SET_ENABLED_SYM)
 }
 
-pub fn external_disabler_wants_disable() -> bool {
+pub fn exported_disabler_symbol_present() -> bool {
     lookup_symbol_exists(SSBUSYNC_EXTERNAL_DISABLER_PROBE_SYM)
-}
-
-fn call_lookup_set_enabled(enabled: bool) -> bool {
-    let Some(addr) = lookup_symbol_addr(SSBUSYNC_SET_ENABLED_SYM) else {
-        return false;
-    };
-
-    let func: Option<SetEnabledFn> = unsafe { core::mem::transmute(addr) };
-    if let Some(func) = func {
-        func(enabled as u32);
-        return true;
-    }
-
-    false
-}
-
-fn call_lookup_request_disable() -> Option<u32> {
-    let addr = lookup_symbol_addr(SSBUSYNC_REQUEST_DISABLE_SYM)?;
-    let func: Option<RequestDisableFn> = unsafe { core::mem::transmute(addr) };
-    func.map(|f| f())
 }
 
 fn call_lookup_register_disabler() -> Option<u32> {
     let addr = lookup_symbol_addr(SSBUSYNC_REGISTER_DISABLER_SYM)?;
+    // Use Option<fn> niche semantics: a 0 symbol address becomes None.
     let func: Option<RegisterDisablerFn> = unsafe { core::mem::transmute(addr) };
-    func.map(|f| f())
+    func.map(|f| unsafe { f() })
 }
 
 fn call_lookup_is_enabled() -> Option<u32> {
     let addr = lookup_symbol_addr(SSBUSYNC_IS_ENABLED_SYM)?;
     let func: Option<IsEnabledFn> = unsafe { core::mem::transmute(addr) };
-    func.map(|f| f())
+    func.map(|f| unsafe { f() })
 }
 
 pub fn disable_ssbusync_if_cached() -> DisableResult {
@@ -156,26 +108,10 @@ pub fn disable_ssbusync_if_cached() -> DisableResult {
         return DisableResult::Indeterminate;
     }
 
-    if let Some(result) = call_lookup_request_disable() {
-        if result != 0 {
-            return DisableResult::Disabled;
-        }
-        if matches!(call_lookup_is_enabled(), Some(0)) {
-            return DisableResult::Disabled;
-        }
-        return DisableResult::Indeterminate;
-    }
-
-    // Older builds may not export request_disable; this remains best-effort only.
-    if call_lookup_set_enabled(false) {
-        return DisableResult::Indeterminate;
-    }
-
     DisableResult::NotAvailable
 }
 
-// Attempts to claim ssbu sync install once.
-// Returns Disabled only for one disabler.
+// Tries to disable ssbusync through the explicit register_disabler API.
 pub unsafe fn try_claim_external_disabler() -> DisableResult {
     let _ = try_cache_ssbusync_exports_global();
     disable_ssbusync_if_cached()
@@ -200,8 +136,6 @@ pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideSt
 
     if info.name == "ssbusync" {
         state.saw_ssbusync = true;
-        let set_status = observe_ssbusync_set_enabled(info);
-        let req_status = observe_ssbusync_request_disable(info);
         let reg_status = observe_ssbusync_register_disabler(info);
         match disable_ssbusync_if_cached() {
             DisableResult::Disabled => {
@@ -216,10 +150,7 @@ pub unsafe fn observe_and_decide_override(info: &NroInfo, state: &mut OverrideSt
                 );
             }
             DisableResult::NotAvailable => {
-                if set_status == CacheStatus::Missing
-                    || req_status == CacheStatus::Missing
-                    || reg_status == CacheStatus::Missing
-                {
+                if reg_status == CacheStatus::Missing {
                     println!("[ssbusync-compat] ssbusync loaded, but expected exports are missing.");
                 }
             }

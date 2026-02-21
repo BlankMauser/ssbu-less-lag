@@ -213,7 +213,7 @@ pub unsafe fn load_slot_fn<F: Copy>(slot_addr: usize) -> F {
 /// Resolves all NVN function pointers using the resolver callback.
 ///
 /// `resolver` and `get_proc` correspond to the two arguments passed to
-/// the symbol-loading function found in the game binary (see nvn_vtable.txt).
+/// the symbol-loading function found in the game binary
 ///
 /// `get_proc` is called as `get_proc(resolver, b"nvnFunctionName\0".as_ptr()) -> fn ptr`
 pub unsafe fn init_from_resolver(

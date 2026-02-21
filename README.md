@@ -23,6 +23,12 @@ Thanks for understanding!
 
 This crate can also be installed from another Cargo Skyline plugin.
 
+Terminology used below:
+
+- `ssbusync.nro`: the standalone plugin entry build (`#[skyline::main(name = "ssbusync")]`).
+- `library plugin`: your own plugin that depends on this crate with `default-features = false`.
+- `Exported Disabler`: your library plugin exports `ssbusync_external_disabler`, and `ssbusync.nro` detects that symbol and disables itself.
+
 `Cargo.toml` Example:
 
 ```toml
@@ -37,7 +43,7 @@ To disable "ssbusync.nro" from your own plugin NRO, enable:
 ssbusync = { git = "https://github.com/BlankMauser/ssbu-sync", default-features = false, features = ["disabler-symbol"] }
 ```
 
-That feature exports `ssbusync_external_disabler`, which `ssbusync.nro` probes before loading.
+That feature exports `ssbusync_external_disabler` from your plugin (not from `ssbusync.nro`), which `ssbusync.nro` probes before loading.
 
 Installing hooks from your own `#[skyline::main]`:
 
@@ -71,3 +77,15 @@ fn on_nro_load(info: &skyline::nro::NroInfo) {
     }
 }
 ```
+
+### Disable methods (explicit)
+
+There are only two disable methods:
+
+- `Exported Disabler` symbol: your plugin exports `ssbusync_external_disabler`; `ssbusync.nro` sees it and disables itself.
+- `ssbusync_register_disabler`: your plugin actively calls the exported API from `ssbusync.nro` before install.
+
+`ssbusync_register_disabler` return values:
+
+- `1`: disable claim accepted (or another disabler already claimed and `ssbusync` is already disabled).
+- `0`: too late, `ssbusync` already installed.
