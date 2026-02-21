@@ -36,6 +36,8 @@ Terminology used below:
 ssbusync = { git = "https://github.com/BlankMauser/ssbu-sync", default-features = false }
 ```
 
+### Easy External Disable
+
 To disable "ssbusync.nro" from your own plugin NRO, enable:
 
 ```toml
@@ -54,7 +56,7 @@ cfg.disable_pacer = false;
 ssbusync::Install_SSBU_Sync(cfg);
 ```
 
-### NRO Hook Disable (short)
+### NRO Hook Disable
 
 Use this if you want to wait for NRO load order and only install your custom path once.
 
@@ -80,11 +82,8 @@ fn on_nro_load(info: &skyline::nro::NroInfo) {
 
 ### Disable methods 
 
-- `Exported Disabler` symbol: your plugin exports `ssbusync_external_disabler`; `ssbusync.nro` sees it and disables itself.
-- `ssbusync_register_disabler`: your plugin actively calls the exported API from `ssbusync.nro` before install.
-- Multiple plugins may export `ssbusync_external_disabler`; this is treated as a boolean "present" probe and does not call through the symbol.
+- `Exported Disabler` symbol: your plugin exports `ssbusync_external_disabler` as a symbol before ssbusync is loaded.
+- `ssbusync_register_disabler`: your plugin registers to ssbu-syncs exported symbol before its loaded.
+- Multiple plugins may export `ssbusync_external_disabler`
 
-`ssbusync_register_disabler` return values:
-
-- `1`: disable claim accepted (or another disabler already claimed and `ssbusync` is already disabled).
-- `0`: too late, `ssbusync` already installed.
+The install process can be time-sensitive so if there are any crashes its most likely from overlapping patches.
