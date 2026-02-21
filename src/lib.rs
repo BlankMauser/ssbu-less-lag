@@ -27,7 +27,7 @@ impl Default for SsbuSyncConfig {
             disable_vsync: true,
             disable_pacer: false,
             enable_triple_buffer: false,
-            doubles_fix: true,
+            doubles_fix: false,
             emulator_check: Some(is_emulator()),
         }
     }
@@ -132,7 +132,6 @@ pub extern "C" fn ssbusync_is_enabled() -> u32 {
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
-    println!("[ssbusync] Installing Hooks. \n");
     if emulator {
         println!("[ssbusync] Emulator Detected. \n");
     }
@@ -179,7 +178,7 @@ fn try_install_once() {
         return;
     }
 
-    println!("[ssbusync] installing hooks");
+    println!("[ssbusync] SSBU-sync.nro installing");
     Install_SSBU_Sync(SsbuSyncConfig::default());
 }
 

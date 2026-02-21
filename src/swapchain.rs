@@ -40,10 +40,8 @@ unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
 #[inline(always)]
 fn log_set_window_hook_hit() {
     let hit = SET_WINDOW_HOOK_HITS.fetch_add(1, Ordering::Relaxed) + 1;
-    // Print a few early hits and then every 60 hits to keep log spam manageable.
-    if hit <= 10 || (hit % 60 == 0) {
-        skyline::println!("[swapchain] set_window_textures hook hit={}", hit);
-    }
+    skyline::println!("[swapchain] set_window_textures hook hit={}", hit);
+    
 }
 
 /** Ultimate Render Pipeline Docs
