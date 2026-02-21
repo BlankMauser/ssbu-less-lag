@@ -261,21 +261,29 @@ fn restore_render_sync_wait() {
 // Can be called at runtime. Set to 2 = double buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
-    //log_set_window_hook_hit();
-    let window_target = cache_window_target_from_ctx(ctx);
+    let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
     if window_target != 0 {
-        set_window_textures_impl(window_target, 2);
+        WINDOW_TARGET.store(window_target, Ordering::Release);
     }
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb80)
+        .cast::<extern "C" fn(u64, i32)>();
+    func_ptr(window_target, 2);
 }
 
 // Set to 3 = triple buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_triple_window_textures(ctx: &skyline::hooks::InlineCtx) {
-    //log_set_window_hook_hit();
-    let window_target = cache_window_target_from_ctx(ctx);
+    let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
     if window_target != 0 {
-        set_window_textures_impl(window_target, 3);
+        WINDOW_TARGET.store(window_target, Ordering::Release);
     }
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb80)
+        .cast::<extern "C" fn(u64, i32)>();
+    func_ptr(window_target, 3);
 }
 
 fn install_buffer_impl(triple: bool) {
@@ -294,13 +302,11 @@ fn install_buffer_impl(triple: bool) {
 
 pub unsafe fn enable_double_buffer() {
     install_buffer_impl(false);
-    let _ = apply_double_window_textures_now();
     //patch_render_sync_wait();
 }
 
 pub unsafe fn enable_triple_buffer() {
     install_buffer_impl(true);
-    let _ = apply_triple_window_textures_now();
     //restore_render_sync_wait();
 }
 
