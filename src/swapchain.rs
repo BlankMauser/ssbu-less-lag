@@ -3,6 +3,7 @@ use super::*;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
+static SET_WINDOW_HOOK_HITS: AtomicU64 = AtomicU64::new(0);
 
 /// Returns the cached NVN window pointer (0 if not yet seen).
 pub(crate) fn window_target() -> u64 {
@@ -34,6 +35,15 @@ unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
     WINDOW_TARGET.store(window_target, Ordering::Release);
     window_target
+}
+
+#[inline(always)]
+fn log_set_window_hook_hit() {
+    let hit = SET_WINDOW_HOOK_HITS.fetch_add(1, Ordering::Relaxed) + 1;
+    // Print a few early hits and then every 60 hits to keep log spam manageable.
+    if hit <= 10 || (hit % 60 == 0) {
+        skyline::println!("[swapchain] set_window_textures hook hit={}", hit);
+    }
 }
 
 /** Ultimate Render Pipeline Docs
@@ -250,6 +260,7 @@ fn restore_render_sync_wait() {
 // Can be called at runtime. Set to 2 = double buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
+    //log_set_window_hook_hit();
     let window_target = cache_window_target_from_ctx(ctx);
     set_window_textures_impl(window_target, 2);
 }
@@ -257,6 +268,7 @@ unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
 // Set to 3 = triple buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_triple_window_textures(ctx: &skyline::hooks::InlineCtx) {
+    //log_set_window_hook_hit();
     let window_target = cache_window_target_from_ctx(ctx);
     set_window_textures_impl(window_target, 3);
 }
