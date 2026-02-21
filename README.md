@@ -45,6 +45,29 @@ Installing hooks from your own `#[skyline::main]`:
 let mut cfg = ssbusync::SsbuSyncConfig::default();
 cfg.disable_vsync = true;
 cfg.disable_pacer = false;
-ssbusync::install_ssbu_sync(cfg);
+ssbusync::Install_SSBU_Sync(cfg);
 ```
 
+### NRO Hook Disable (short)
+
+Use this if you want to wait for NRO load order and only install your custom path once.
+
+```rust
+static mut OVERRIDE_STATE: ssbusync::compatibility::OverrideState =
+    ssbusync::compatibility::OverrideState::new();
+
+#[skyline::main(name = "my_plugin")]
+pub fn main() {
+    let _ = unsafe { ssbusync::compatibility::try_claim_external_disabler() };
+    skyline::nro::add_hook(on_nro_load).expect("nro hook unavailable");
+}
+
+fn on_nro_load(info: &skyline::nro::NroInfo) {
+    let action = unsafe {
+        ssbusync::compatibility::observe_and_claim_override(info, &mut OVERRIDE_STATE)
+    };
+    if action == ssbusync::compatibility::OverrideAction::InstallCustom {
+        unsafe { ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default()) };
+    }
+}
+```

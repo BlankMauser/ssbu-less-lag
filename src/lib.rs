@@ -17,6 +17,7 @@ pub struct SsbuSyncConfig {
     pub disable_vsync: bool,
     pub disable_pacer: bool,
     pub enable_triple_buffer: bool,
+    pub doubles_fix: bool,
     pub emulator_check: Option<bool>,
 }
 
@@ -26,6 +27,7 @@ impl Default for SsbuSyncConfig {
             disable_vsync: true,
             disable_pacer: false,
             enable_triple_buffer: false,
+            doubles_fix: true,
             emulator_check: Some(is_emulator()),
         }
     }
@@ -54,6 +56,7 @@ static ENABLED: AtomicBool = AtomicBool::new(true);
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 static NRO_HOOK_REGISTERED: AtomicBool = AtomicBool::new(false);
 static DISABLER_REGISTERED: AtomicBool = AtomicBool::new(false);
+static DOUBLES_FIX: AtomicBool = AtomicBool::new(false);
 const BARRIER_MODULE_NAME: &str = "unknown";
 
 #[cfg(feature = "disabler-symbol")]
@@ -80,6 +83,16 @@ fn try_claim_disabler(source: &str) -> u32 {
 }
 
 fn try_claim_external_symbol_disabler() -> bool {
+    // Already claimed by any external
+    if DISABLER_REGISTERED.load(Ordering::Acquire) {
+        return true;
+    }
+
+    // Already Installed
+    if INSTALLED.load(Ordering::Acquire) {
+        return false;
+    }
+
     if !compatibility::external_disabler_wants_disable() {
         return false;
     }
@@ -97,15 +110,14 @@ pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
     }
 }
 
-// Optional external override API: call this before `common` to stop ssbusync auto-install.
-// Returns 1 if now disabled, 0 if already installed and too late.
+// External override API: call this before nro barrier
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_request_disable() -> u32 {
     // Legacy API path; keep behavior aligned with register_disabler.
     try_claim_disabler("request_disable")
 }
 
-// External disabler handshake for cross-NRO consumers.
+// External disabler handshake for cross-NRO plugins
 // Returns 1 if accepted before install, 0 if already installed.
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_register_disabler() -> u32 {
@@ -124,6 +136,8 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     if emulator {
         println!("[ssbusync] Emulator Detected. \n");
     }
+    DOUBLES_FIX.store(config.doubles_fix, Ordering::Release);
+
 
     vsync_history::install();
     swapchain::install(config);
@@ -136,13 +150,13 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
 }
 
 pub fn Enable_Double_Buffer() {
-    if !is_emulator() {
+    if !is_emulator() && DOUBLES_FIX.load(Ordering::Acquire) {
         unsafe { swapchain::enable_double_buffer(); }
     }
 }
 
 pub fn Enable_Triple_Buffer() {
-    if !is_emulator() {
+    if !is_emulator() && DOUBLES_FIX.load(Ordering::Acquire) {
         unsafe { swapchain::enable_triple_buffer(); }
     }
 }
@@ -151,12 +165,10 @@ fn try_install_once() {
     let _ = try_claim_external_symbol_disabler();
 
     if DISABLER_REGISTERED.load(Ordering::Acquire) {
-        println!("[ssbusync] disabler registered; skipping install");
         return;
     }
 
     if !ENABLED.load(Ordering::Acquire) {
-        println!("[ssbusync] disabled; skipping install");
         return;
     }
 
@@ -181,7 +193,6 @@ pub fn notify_nro_load(info: &NroInfo) {
 }
 
 fn on_nro_load(info: &NroInfo) {
-    let _ = try_claim_external_symbol_disabler();
     notify_nro_load(info);
 }
 

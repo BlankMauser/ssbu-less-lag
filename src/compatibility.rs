@@ -5,6 +5,7 @@ use skyline::nro::NroInfo;
 type SetEnabledFn = extern "C" fn(u32);
 type RequestDisableFn = extern "C" fn() -> u32;
 type RegisterDisablerFn = extern "C" fn() -> u32;
+type IsEnabledFn = extern "C" fn() -> u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheStatus {
@@ -47,6 +48,7 @@ pub static CUSTOM_INSTALL_CLAIMED: AtomicBool = AtomicBool::new(false);
 const SSBUSYNC_SET_ENABLED_SYM: &[u8] = b"ssbusync_set_enabled\0";
 const SSBUSYNC_REQUEST_DISABLE_SYM: &[u8] = b"ssbusync_request_disable\0";
 const SSBUSYNC_REGISTER_DISABLER_SYM: &[u8] = b"ssbusync_register_disabler\0";
+const SSBUSYNC_IS_ENABLED_SYM: &[u8] = b"ssbusync_is_enabled\0";
 pub const SSBUSYNC_EXTERNAL_DISABLER_PROBE_SYM: &[u8] = b"ssbusync_external_disabler\0";
 
 fn lookup_symbol_addr(sym_nul: &[u8]) -> Option<usize> {
@@ -136,9 +138,19 @@ fn call_lookup_register_disabler() -> Option<u32> {
     func.map(|f| f())
 }
 
+fn call_lookup_is_enabled() -> Option<u32> {
+    let addr = lookup_symbol_addr(SSBUSYNC_IS_ENABLED_SYM)?;
+    let func: Option<IsEnabledFn> = unsafe { core::mem::transmute(addr) };
+    func.map(|f| f())
+}
+
 pub fn disable_ssbusync_if_cached() -> DisableResult {
     if let Some(result) = call_lookup_register_disabler() {
         if result != 0 {
+            return DisableResult::Disabled;
+        }
+        if matches!(call_lookup_is_enabled(), Some(0)) {
+            // Another disabler got here first; ssbusync is already disabled.
             return DisableResult::Disabled;
         }
         return DisableResult::Indeterminate;
@@ -146,6 +158,9 @@ pub fn disable_ssbusync_if_cached() -> DisableResult {
 
     if let Some(result) = call_lookup_request_disable() {
         if result != 0 {
+            return DisableResult::Disabled;
+        }
+        if matches!(call_lookup_is_enabled(), Some(0)) {
             return DisableResult::Disabled;
         }
         return DisableResult::Indeterminate;
@@ -254,35 +269,3 @@ pub unsafe fn observe_and_claim_override(info: &NroInfo, state: &mut OverrideSta
     }
     action
 }
-
-// Recommended disabler flow:
-//
-// 1) Register exactly one NRO load hook in your plugin startup.
-// 2) Do an immediate global lookup + disable attempt in startup.
-// 3) Send every NRO event to observe_and_decide_override(...).
-// 4) Only install custom path if action == InstallCustom.
-//
-// Safety notes:
-// - on_nro_load runs for every NRO, but this helper ignores unrelated module names.
-// - state.decided ensures the decision is only taken once.
-// - Your own custom install should also be one-shot guarded.
-//
-// static mut OVERRIDE_STATE: ssbusync::compatibility::OverrideState =
-//     ssbusync::compatibility::OverrideState::new();
-//
-// fn compat_init() {
-//     let _ = unsafe { ssbusync::compatibility::try_claim_external_disabler() };
-//
-//     skyline::nro::add_hook(on_nro_load).expect("nro hook unavailable");
-// }
-//
-// fn on_nro_load(info: &skyline::nro::NroInfo) {
-//     let action = unsafe {
-//         ssbusync::compatibility::observe_and_claim_override(info, &mut OVERRIDE_STATE)
-//     };
-//
-//     if action == ssbusync::compatibility::OverrideAction::InstallCustom {
-//         println!("[my-plugin] installing custom ssbusync path");
-//         unsafe { ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default()) };
-//     }
-// }
