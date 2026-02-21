@@ -78,12 +78,11 @@ fn on_nro_load(info: &skyline::nro::NroInfo) {
 }
 ```
 
-### Disable methods (explicit)
-
-There are only two disable methods:
+### Disable methods 
 
 - `Exported Disabler` symbol: your plugin exports `ssbusync_external_disabler`; `ssbusync.nro` sees it and disables itself.
 - `ssbusync_register_disabler`: your plugin actively calls the exported API from `ssbusync.nro` before install.
+- Multiple plugins may export `ssbusync_external_disabler`; this is treated as a boolean "present" probe and does not call through the symbol.
 
 `ssbusync_register_disabler` return values:
 

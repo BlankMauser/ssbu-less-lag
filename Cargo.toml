@@ -1,5 +1,6 @@
 [workspace]
 members = [".", "ngpu"]
+default-members = ["."]
 
 [package]
 name = "ssbusync"

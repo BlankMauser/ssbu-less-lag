@@ -33,7 +33,10 @@ unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
 #[inline(always)]
 unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
-    WINDOW_TARGET.store(window_target, Ordering::Release);
+    // Avoid poisoning the cache with null/invalid bootstrap values.
+    if window_target != 0 {
+        WINDOW_TARGET.store(window_target, Ordering::Release);
+    }
     window_target
 }
 
@@ -217,8 +220,8 @@ fn use_current_frame_index() {
 }
 
 // FRAMES IN FLIGHT MANAGEMENT:
-// SSBU is triple buffered. Sets render target index to 2 past freshly acquired texture normally.
-// This patches it to +1 modulo 2 instead of +2.
+// SSBU default path is effectively (+2) over a triple-buffered ring.
+// Console double-buffer mode uses (+1) % 2.
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
@@ -226,7 +229,7 @@ fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 2);
+    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
@@ -260,7 +263,9 @@ fn restore_render_sync_wait() {
 unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
     //log_set_window_hook_hit();
     let window_target = cache_window_target_from_ctx(ctx);
-    set_window_textures_impl(window_target, 2);
+    if window_target != 0 {
+        set_window_textures_impl(window_target, 2);
+    }
 }
 
 // Set to 3 = triple buffer.
@@ -268,7 +273,9 @@ unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
 unsafe fn set_triple_window_textures(ctx: &skyline::hooks::InlineCtx) {
     //log_set_window_hook_hit();
     let window_target = cache_window_target_from_ctx(ctx);
-    set_window_textures_impl(window_target, 3);
+    if window_target != 0 {
+        set_window_textures_impl(window_target, 3);
+    }
 }
 
 fn install_buffer_impl(triple: bool) {
@@ -330,13 +337,14 @@ pub fn install(config: SsbuSyncConfig) {
     }
 
     if emulator {
-    skyline::install_hooks!(
-        flush_swap_buffers_before_present,
-        emu_full_swapchain_flush,
-        emu_use_next_frame_index,
-        set_double_window_textures
-    );
+        skyline::install_hooks!(
+            flush_swap_buffers_before_present,
+            emu_full_swapchain_flush,
+            emu_use_next_frame_index,
+            set_double_window_textures
+        );
     } else {
+        // Console path: keep emulator-only hooks disabled.
         skyline::install_hook!(full_swapchain_flush);
         install_buffer_impl(config.enable_triple_buffer);
     }

@@ -93,7 +93,9 @@ fn try_claim_external_symbol_disabler() -> bool {
         return false;
     }
 
-    if !compatibility::exported_disabler_symbol_present() {
+    // Probe-only check: we do not call through the symbol pointer, so multiple
+    // plugins exporting the marker is safe; any match just means "disable".
+    if !compatibility::external_disabler_wants_disable() {
         return false;
     }
 
@@ -110,9 +112,15 @@ pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
     }
 }
 
-// Primary disable handshake for cross-NRO plugins.
-// Returns 1 when disable is claimed before install.
-// Returns 0 only when ssbusync is already installed.
+// External override API: call this before nro barrier
+#[cfg_attr(feature = "nro-entry", no_mangle)]
+pub extern "C" fn ssbusync_request_disable() -> u32 {
+    // Legacy API path; keep behavior aligned with register_disabler.
+    try_claim_disabler("request_disable")
+}
+
+// External disabler handshake for cross-NRO plugins
+// Returns 1 if accepted before install, 0 if already installed.
 #[cfg_attr(feature = "nro-entry", no_mangle)]
 pub extern "C" fn ssbusync_register_disabler() -> u32 {
     try_claim_disabler("register_disabler")
@@ -177,6 +185,10 @@ fn try_install_once() {
 }
 
 pub fn notify_nro_load(info: &NroInfo) {
+    if DISABLER_REGISTERED.load(Ordering::Acquire) || !ENABLED.load(Ordering::Acquire) {
+        return;
+    }
+
     if info.name != BARRIER_MODULE_NAME {
         return;
     }
@@ -195,6 +207,10 @@ pub fn register_nro_hook() {
     }
 
     let _ = try_claim_external_symbol_disabler();
+    if DISABLER_REGISTERED.load(Ordering::Acquire) || !ENABLED.load(Ordering::Acquire) {
+        println!("[ssbusync] disabled before hook registration; skipping hook install.");
+        return;
+    }
 
     match nro::add_hook(on_nro_load) {
         Ok(()) => println!("[ssbusync] nro hook registered."),
