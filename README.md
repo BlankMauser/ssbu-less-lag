@@ -23,9 +23,7 @@ Thanks for understanding!
 
 This crate can also be installed from another Cargo Skyline plugin.
 
-Terminology used below:
-
-- `ssbusync.nro`: the standalone plugin entry build (`#[skyline::main(name = "ssbusync")]`).
+- `ssbusync.nro`: the standalone plugin (`#[skyline::main(name = "ssbusync")]`).
 - `library plugin`: your own plugin that depends on this crate with `default-features = false`.
 - `Exported Disabler`: your library plugin exports `ssbusync_external_disabler`, and `ssbusync.nro` detects that symbol and disables itself.
 
@@ -87,3 +85,4 @@ fn on_nro_load(info: &skyline::nro::NroInfo) {
 - Multiple plugins may export `ssbusync_external_disabler`
 
 The install process can be time-sensitive so if there are any crashes its most likely from overlapping patches.
+
