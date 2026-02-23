@@ -58,8 +58,6 @@ crate::nvn_wrap_void!(window_set_num_active_textures(window: *mut NvnWindow, act
 crate::nvn_wrap_ret!(window_get_num_active_textures(window: *const NvnWindow) -> i32 => SLOT_NVN_WINDOW_GET_NUM_ACTIVE_TEXTURES);
 crate::nvn_wrap_ret!(window_get_num_textures(window: *const NvnWindow) -> i32 => SLOT_NVN_WINDOW_GET_NUM_TEXTURES);
 
-
-#[inline(always)]
 pub unsafe fn acquire_texture(
     window: *mut NvnWindow,
     texture_available_sync: *mut NvnSync,
@@ -68,27 +66,22 @@ pub unsafe fn acquire_texture(
     window_acquire_texture(window, texture_available_sync, texture_index)
 }
 
-#[inline(always)]
 pub unsafe fn get_present_interval(window: *const NvnWindow) -> i32 {
     window_get_present_interval(window)
 }
 
-#[inline(always)]
 pub unsafe fn set_present_interval(window: *mut NvnWindow, present_interval: i32) {
     window_set_present_interval(window, present_interval)
 }
 
-#[inline(always)]
 pub unsafe fn get_num_active_textures(window: *const NvnWindow) -> i32 {
     window_get_num_active_textures(window)
 }
 
-#[inline(always)]
 pub unsafe fn set_num_active_textures(window: *mut NvnWindow, active_texture_count: i32) {
     window_set_num_active_textures(window, active_texture_count)
 }
 
-#[inline(always)]
 pub unsafe fn nvn_window_acquire_texture(
     window: *mut NvnWindow,
     texture_available_sync: *mut NvnSync,
@@ -97,22 +90,18 @@ pub unsafe fn nvn_window_acquire_texture(
     window_acquire_texture(window, texture_available_sync, texture_index)
 }
 
-#[inline(always)]
 pub unsafe fn nvn_window_get_present_interval(window: *const NvnWindow) -> i32 {
     window_get_present_interval(window)
 }
 
-#[inline(always)]
 pub unsafe fn nvn_window_set_present_interval(window: *mut NvnWindow, present_interval: i32) {
     window_set_present_interval(window, present_interval)
 }
 
-#[inline(always)]
 pub unsafe fn nvn_window_get_num_active_textures(window: *const NvnWindow) -> i32 {
     window_get_num_active_textures(window)
 }
 
-#[inline(always)]
 pub unsafe fn nvn_window_set_num_active_textures(window: *mut NvnWindow, active_texture_count: i32) {
     window_set_num_active_textures(window, active_texture_count)
 }

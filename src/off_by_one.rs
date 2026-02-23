@@ -1,7 +1,5 @@
 use skyline::hooks::InlineCtx;
 
-use crate::{profiling::OsTick, vsync_history::get_system_tick};
-
 /** Updates the models of every battle object to match their animation
  *
  * We have to call this manually, normally it's called from TaskWorker2

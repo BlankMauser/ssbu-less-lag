@@ -1,51 +1,155 @@
-use crate::sequencing;
 use super::*;
-use core::sync::atomic::{AtomicU64, Ordering};
+use crate::render::buffer_swap::*;
+use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
+static PENDING_WINDOW_TEXTURES: AtomicU8 = AtomicU8::new(0);
+static mut FRAME_INDEX_MODULO: u64 = 3;
+static mut SET_WINDOW_NUM_ACTIVE_TEXTURES_FN: Option<extern "C" fn(u64, i32)> = None;
+static mut GET_WINDOW_NUM_ACTIVE_TEXTURES_FN: Option<extern "C" fn(u64) -> i32> = None;
+static mut GET_WINDOW_NUM_TEXTURES_FN: Option<extern "C" fn(u64) -> i32> = None;
+
+const WINDOW_TARGET_VALID_BIT: u64 = 1;
+
+#[inline]
+fn encode_window_target(ptr: u64) -> u64 {
+    (ptr & !WINDOW_TARGET_VALID_BIT) | WINDOW_TARGET_VALID_BIT
+}
+
+#[inline]
+fn decode_window_target(raw: u64) -> u64 {
+    raw & !WINDOW_TARGET_VALID_BIT
+}
+
+#[inline]
+pub(crate) fn window_target_is_valid() -> bool {
+    (WINDOW_TARGET.load(Ordering::Acquire) & WINDOW_TARGET_VALID_BIT) != 0
+}
+
+pub(crate) fn observe_window_target(window_target: u64, source: &str) {
+    if window_target == 0 {
+        return;
+    }
+
+    let raw = WINDOW_TARGET.load(Ordering::Acquire);
+    let current = decode_window_target(raw);
+    let valid = (raw & WINDOW_TARGET_VALID_BIT) != 0;
+
+    if !valid {
+        WINDOW_TARGET.store(encode_window_target(window_target), Ordering::Release);
+        println!("[ssbu-sync] cached window target from {source}: 0x{window_target:x}");
+        return;
+    }
+
+    if current != window_target {
+        WINDOW_TARGET.store(encode_window_target(window_target), Ordering::Release);
+        println!(
+            "[ssbu-sync] window target updated from {source}: 0x{current:x} -> 0x{window_target:x}"
+        );
+    }
+}
 //static SET_WINDOW_HOOK_HITS: AtomicU64 = AtomicU64::new(0);
 
 /// Returns the cached NVN window pointer (0 if not yet seen).
 pub(crate) fn window_target() -> u64 {
-    WINDOW_TARGET.load(Ordering::Acquire)
+    decode_window_target(WINDOW_TARGET.load(Ordering::Acquire))
 }
 
-/// Resolved function pointer for `nvnWindowGetNumActiveTextures`.
-/// The game stores resolved NVN procs in its text section:
-///   0x593fb80 = nvnWindowSetNumActiveTextures
-///   0x593fb88 = nvnWindowGetNumActiveTextures
-pub(crate) unsafe fn get_window_num_active_textures_fn() -> unsafe extern "C" fn(*const ()) -> i32 {
-    *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-        .cast::<u8>()
-        .add(0x593fb88)
-        .cast::<unsafe extern "C" fn(*const ()) -> i32>()
+#[inline]
+fn normalize_texture_count(num: i32) -> Option<u8> {
+    match num {
+        2 => Some(2),
+        3 => Some(3),
+        _ => None,
+    }
 }
 
-#[inline(always)]
-unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
+pub fn set_runtime_frame_index_mode(triple: bool) {
+    unsafe {
+        FRAME_INDEX_MODULO = if triple { 3 } else { 2 };
+    }
+}
+
+unsafe fn resolve_set_window_num_active_textures_fn() -> extern "C" fn(u64, i32) {
+    if let Some(func_ptr) = SET_WINDOW_NUM_ACTIVE_TEXTURES_FN {
+        return func_ptr;
+    }
+
     let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
         .cast::<u8>()
         .add(0x593fb80)
         .cast::<extern "C" fn(u64, i32)>();
+    SET_WINDOW_NUM_ACTIVE_TEXTURES_FN = Some(func_ptr);
+    func_ptr
+}
+
+unsafe fn resolve_get_window_num_active_textures_fn() -> extern "C" fn(u64) -> i32 {
+    if let Some(func_ptr) = GET_WINDOW_NUM_ACTIVE_TEXTURES_FN {
+        return func_ptr;
+    }
+
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb88)
+        .cast::<extern "C" fn(u64) -> i32>();
+    GET_WINDOW_NUM_ACTIVE_TEXTURES_FN = Some(func_ptr);
+    func_ptr
+}
+
+unsafe fn resolve_get_window_num_textures_fn() -> extern "C" fn(u64) -> i32 {
+    if let Some(func_ptr) = GET_WINDOW_NUM_TEXTURES_FN {
+        return func_ptr;
+    }
+
+    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
+        .cast::<u8>()
+        .add(0x593fb90)
+        .cast::<extern "C" fn(u64) -> i32>();
+    GET_WINDOW_NUM_TEXTURES_FN = Some(func_ptr);
+    func_ptr
+}
+
+pub(crate) fn get_window_num_active_textures_fn() -> extern "C" fn(u64) -> i32 {
+    unsafe { resolve_get_window_num_active_textures_fn() }
+}
+
+pub(crate) fn get_window_num_textures_fn() -> extern "C" fn(u64) -> i32 {
+    unsafe { resolve_get_window_num_textures_fn() }
+}
+
+unsafe fn set_window_textures_impl(window_target: u64, count: i32) {
+    let func_ptr = resolve_set_window_num_active_textures_fn();
     func_ptr(window_target, count);
 }
 
-#[inline(always)]
+pub fn apply_pending_window_texture_request(window_target: u64, source: &str) -> bool {
+    let Some(requested) = normalize_texture_count(PENDING_WINDOW_TEXTURES.load(Ordering::Acquire) as i32) else {
+        return false;
+    };
+    if window_target == 0 {
+        return false;
+    }
+
+    unsafe {
+        set_window_textures_impl(window_target, requested as i32);
+        let current = resolve_get_window_num_active_textures_fn()(window_target);
+        if current == requested as i32 {
+            PENDING_WINDOW_TEXTURES.store(0, Ordering::Release);
+            println!(
+                "[ssbu-sync] applied queued window texture request from {source}: {requested}"
+            );
+            return true;
+        }
+    }
+    false
+}
+
 unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
     // Avoid poisoning the cache with null/invalid bootstrap values.
-    if window_target != 0 {
-        WINDOW_TARGET.store(window_target, Ordering::Release);
-    }
+    observe_window_target(window_target, "cache_window_target_from_ctx");
     window_target
 }
-
-// #[inline(always)]
-// fn log_set_window_hook_hit() {
-//     let hit = SET_WINDOW_HOOK_HITS.fetch_add(1, Ordering::Relaxed) + 1;
-//     skyline::println!("[swapchain] set_window_textures hook hit={}", hit);
-    
-// }
 
 /** Ultimate Render Pipeline Docs
  * Ultimate makes use of multi-threaded rendering, and does so very poorly.
@@ -189,7 +293,7 @@ unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
     // // call_original!(arg1, arg2);
 }
 
-// Emulator is powerful enough to handle multiple flushes.
+
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn emu_full_swapchain_flush(arg1: u64, arg2: u32) {
     call_original!(arg1, arg2);
@@ -229,7 +333,13 @@ fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
-    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
+    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 3);
+}
+
+#[skyline::hook(offset = 0x386ab4c, inline)]
+fn use_next_frame_index_runtime(ctx: &mut skyline::hooks::InlineCtx) {
+    let modulo = unsafe { FRAME_INDEX_MODULO };
+    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % modulo);
 }
 
 #[skyline::hook(offset = 0x386ab4c, inline)]
@@ -250,83 +360,58 @@ fn patch_render_sync_wait() {
         .unwrap();
 }
 
-fn restore_render_sync_wait() {
-    // Original instruction at 0x386fcec:
-    //   00 01 3f d6  =>  blr x8
-    skyline::patching::Patch::in_text(0x386fcec)
-        .data(0xD63F0100u32)
-        .unwrap();
-}
+// fn restore_render_sync_wait() {
+//     // Original instruction at 0x386fcec:
+//     //   00 01 3f d6  =>  blr x8
+//     skyline::patching::Patch::in_text(0x386fcec)
+//         .data(0xD63F0100u32)
+//         .unwrap();
+// }
 
-// Can be called at runtime. Set to 2 = double buffer.
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
-    if window_target != 0 {
-        WINDOW_TARGET.store(window_target, Ordering::Release);
-    }
-    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-        .cast::<u8>()
-        .add(0x593fb80)
-        .cast::<extern "C" fn(u64, i32)>();
-    func_ptr(window_target, 2);
-}
-
-// Set to 3 = triple buffer.
-#[skyline::hook(offset = 0x38601f8, inline)]
-unsafe fn set_triple_window_textures(ctx: &skyline::hooks::InlineCtx) {
-    let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);
-    if window_target != 0 {
-        WINDOW_TARGET.store(window_target, Ordering::Release);
-    }
-    let func_ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
-        .cast::<u8>()
-        .add(0x593fb80)
-        .cast::<extern "C" fn(u64, i32)>();
-    func_ptr(window_target, 3);
-}
-
-fn install_buffer_impl(triple: bool) {
-    if triple {
-        skyline::install_hooks!(
-            use_next_frame_index_triple,
-            set_triple_window_textures
-        );
-    } else {
-        skyline::install_hooks!(
-            use_next_frame_index_double,
-            set_double_window_textures
-        );
-    }
-}
-
-pub unsafe fn enable_double_buffer() {
-    install_buffer_impl(false);
-    //patch_render_sync_wait();
-}
-
-pub unsafe fn enable_triple_buffer() {
-    install_buffer_impl(true);
-    //restore_render_sync_wait();
-}
-
-// Runtime callable path: apply the current texture count if a window target has been seen.
-pub unsafe fn apply_double_window_textures_now() -> bool {
-    let window_target = WINDOW_TARGET.load(Ordering::Acquire);
-    if window_target == 0 {
-        return false;
-    }
+    observe_window_target(window_target, "set_double_window_textures");
     set_window_textures_impl(window_target, 2);
-    true
 }
 
-pub unsafe fn apply_triple_window_textures_now() -> bool {
-    let window_target = WINDOW_TARGET.load(Ordering::Acquire);
-    if window_target == 0 {
+pub fn try_set_window_textures(num: i32) -> bool {
+    let Some(requested) = normalize_texture_count(num) else {
+        return false;
+    };
+    if !window_target_is_valid() {
         return false;
     }
-    //println("window found");
-    set_window_textures_impl(window_target, 3);
+
+    let window = window_target();
+    if window == 0 {
+        return false;
+    }
+
+    unsafe {
+        let total = resolve_get_window_num_textures_fn()(window);
+        if total < requested as i32 {
+            println!(
+                "[ssbu-sync] cannot set active textures to {} because capacity is {}",
+                requested, total
+            );
+            return false;
+        }
+
+        set_window_textures_impl(window, requested as i32);
+        let active = resolve_get_window_num_active_textures_fn()(window);
+        if active == requested as i32 {
+            PENDING_WINDOW_TEXTURES.store(0, Ordering::Release);
+            return true;
+        }
+
+        PENDING_WINDOW_TEXTURES.store(requested, Ordering::Release);
+        println!(
+            "[ssbu-sync] deferred window texture request: requested={} current={}",
+            requested, active
+        );
+    }
+
     true
 }
 
@@ -346,20 +431,28 @@ pub fn install(config: SsbuSyncConfig) {
         skyline::install_hooks!(
             flush_swap_buffers_before_present,
             emu_full_swapchain_flush,
-            emu_use_next_frame_index,
-            set_double_window_textures
+            emu_use_next_frame_index
         );
     } else {
         // Console path: keep emulator-only hooks disabled.
         skyline::install_hook!(full_swapchain_flush);
-        install_buffer_impl(config.enable_triple_buffer);
+        if config.doubles_fix {
+            set_runtime_frame_index_mode(config.enable_triple_buffer);
+            skyline::install_hook!(use_next_frame_index_runtime);
+        } else if config.enable_triple_buffer {
+            skyline::install_hook!(use_next_frame_index_triple);
+        } else {
+            skyline::install_hook!(use_next_frame_index_double);
+            skyline::install_hook!(set_double_window_textures);
+        }
     }
 
-    // Seed the render API with the initial buffer mode.
-    // let initial = if config.enable_triple_buffer {
-    //     crate::render::api::BufferMode::Triple
-    // } else {
-    //     crate::render::api::BufferMode::Double
-    // };
-    // crate::render::api::set_initial_mode(initial);
+    // Seed logical runtime mode.
+    let initial = if config.enable_triple_buffer {
+        BufferMode::Triple
+    } else {
+        BufferMode::Double
+    };
+    init_buffer_mode(initial);
+
 }

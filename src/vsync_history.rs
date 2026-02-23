@@ -1,4 +1,5 @@
 use skyline::{hooks::InlineCtx, patching::Patch};
+use crate::SsbuSyncConfig;
 
 use crate::profiling::OsTick;
 
@@ -86,17 +87,23 @@ unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
 
     let ptr = ACQUIRE_TEXTURE_PTR.unwrap_unchecked();
     let frame_ptr = ctx.registers[2].x() as *mut i32;
-    let invocation_tick = get_system_tick();
+    let window_target = ctx.registers[0].x();
+    crate::swapchain::observe_window_target(window_target, "call_acquire_texture_wrapper(arg0)");
+    let _ = crate::swapchain::apply_pending_window_texture_request(
+        window_target,
+        "call_acquire_texture_wrapper(arg0)",
+    );
+    //let invocation_tick = get_system_tick();
     let result = ptr(ctx.registers[0].x(), ctx.registers[1].x(), frame_ptr);
-    let finish_tick = get_system_tick();
+    //let finish_tick = get_system_tick();
     ctx.registers[0].set_w(result);
 
     if result == 0 {
-        crate::profiling::span(
-            "nvnWindowAcquireTexture",
-            OsTick::new(invocation_tick),
-            OsTick::new(finish_tick),
-        );
+        // crate::profiling::span(
+        //     "nvnWindowAcquireTexture",
+        //     OsTick::new(invocation_tick),
+        //     OsTick::new(finish_tick),
+        // );
 
         (QUEUE_WAIT_SYNC_PTR.unwrap_unchecked())(
             *((ctx.registers[23].x() + 0x18) as *const u64),
@@ -124,42 +131,43 @@ unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
     let p_render_sync = *((p_gfx_device + 0x20) as *const u64);
     let p_texture_sync = *((p_gfx_device + 0x28) as *const u64);
 
-    crate::profiling::start_span(
-        "nvnWaitSync(pTextureAvailable)",
-        OsTick::new(get_system_tick()),
-    );
+    // crate::profiling::start_span(
+    //     "nvnWaitSync(pTextureAvailable)",
+    //     OsTick::new(get_system_tick()),
+    // );
 
     (SYNC_WAIT.unwrap_unchecked())(p_texture_sync, u64::MAX);
 
-    crate::profiling::end_span(OsTick::new(get_system_tick()));
+    // crate::profiling::end_span(OsTick::new(get_system_tick()));
 
-    crate::profiling::start_span("WaitForVBlank", OsTick::new(get_system_tick()));
+    // crate::profiling::start_span("WaitForVBlank", OsTick::new(get_system_tick()));
 
     unsafe {
         wait_system_event(&mut SYSTEM_EVENT);
     }
 
-    crate::profiling::end_span(OsTick::new(get_system_tick()));
+    // crate::profiling::end_span(OsTick::new(get_system_tick()));
 
-    let num_frames =
-        unsafe { list_frame_info(FRAME_INFOS.as_mut_ptr(), FRAME_INFOS.len() as i32, LAYER) };
+    // let num_frames =
+    //     unsafe { list_frame_info(FRAME_INFOS.as_mut_ptr(), FRAME_INFOS.len() as i32, LAYER) };
 
-    for frame_info in &FRAME_INFOS[..num_frames as usize] {
-        match frame_info.status {
-            FrameStatus::Unknown => {}
-            FrameStatus::Enqueued => {}
-            FrameStatus::Presented => {
-                if frame_info.frame_number > LAST_PRESENTED as u64 {
-                    crate::profiling::finish_frame(
-                        frame_info.frame_number as usize,
-                        OsTick::new(frame_info.present_time),
-                    );
-                    crate::profiling::vblank(OsTick::new(frame_info.vblank_time));
-                    LAST_PRESENTED = frame_info.frame_number as usize;
-                }
-            }
-        }
-    }
+    // for frame_info in &FRAME_INFOS[..num_frames as usize] {
+    //     match frame_info.status {
+    //         FrameStatus::Unknown => {}
+    //         FrameStatus::Enqueued => {}
+    //         FrameStatus::Presented => {
+    //             if frame_info.frame_number > LAST_PRESENTED as u64 {
+    //                 crate::profiling::finish_frame(
+    //                     frame_info.frame_number as usize,
+    //                     OsTick::new(frame_info.present_time),
+    //                 );
+    //                 crate::profiling::vblank(OsTick::new(frame_info.vblank_time));
+    //                 LAST_PRESENTED = frame_info.frame_number as usize;
+    //             }
+    //         }
+    //     }
+    // }
+    
 }
 
 #[skyline::hook(offset = 0x386fc80, inline)]
@@ -178,61 +186,61 @@ unsafe fn present_texture_wrapper(ctx: &InlineCtx) {
     let ptr = PRESENT_TEXTURE_PTR.unwrap_unchecked();
 
     let frame = ctx.registers[2].w() as i32;
-    let present_tick = get_system_tick();
+    // let present_tick = get_system_tick();
     ptr(ctx.registers[0].x(), ctx.registers[1].x(), frame);
 
-    let mut frame_number = 0u64;
-    if get_latest_frame_number(&mut frame_number, LAYER) == 0 {
-        crate::profiling::submit_frame(frame_number as usize, OsTick::new(present_tick));
-        crate::profiling::start_frame(OsTick::new(present_tick));
-    }
+    // let mut frame_number = 0u64;
+    // if get_latest_frame_number(&mut frame_number, LAYER) == 0 {
+    //     crate::profiling::submit_frame(frame_number as usize, OsTick::new(present_tick));
+    //     crate::profiling::start_frame(OsTick::new(present_tick));
+    // }
 }
 
-pub fn vsync_thread(layer: Layer, display: Display) {
-    let mut system_event = SystemEvent([0u8; 256]);
+// pub fn vsync_thread(layer: Layer, display: Display) {
+//     let mut system_event = SystemEvent([0u8; 256]);
 
-    unsafe {
-        assert_eq!(get_display_vsync_event(&mut system_event, display), 0);
-    }
+//     unsafe {
+//         assert_eq!(get_display_vsync_event(&mut system_event, display), 0);
+//     }
 
-    let max_frame_info = unsafe { list_frame_info(std::ptr::null_mut(), 0, layer) };
+//     let max_frame_info = unsafe { list_frame_info(std::ptr::null_mut(), 0, layer) };
 
-    let mut frame_infos = vec![FrameInfo::default(); max_frame_info as usize];
+//     let mut frame_infos = vec![FrameInfo::default(); max_frame_info as usize];
 
-    let mut last_frame_enqueued = 0;
-    let mut last_frame_presented = 0;
+//     let mut last_frame_enqueued = 0;
+//     let mut last_frame_presented = 0;
 
-    loop {
-        unsafe {
-            wait_system_event(&mut system_event);
-        }
-        // crate::vsync::RUN.store(true, Ordering::SeqCst);
+//     loop {
+//         unsafe {
+//             wait_system_event(&mut system_event);
+//         }
+//         // crate::vsync::RUN.store(true, Ordering::SeqCst);
 
-        let num_frames =
-            unsafe { list_frame_info(frame_infos.as_mut_ptr(), max_frame_info, layer) };
+//         let num_frames =
+//             unsafe { list_frame_info(frame_infos.as_mut_ptr(), max_frame_info, layer) };
 
-        for frame_info in &frame_infos[..num_frames as usize] {
-            match frame_info.status {
-                FrameStatus::Unknown => {}
-                FrameStatus::Enqueued => {
-                    if frame_info.frame_number > last_frame_enqueued {
-                        last_frame_enqueued = frame_info.frame_number;
-                    }
-                }
-                FrameStatus::Presented => {
-                    if frame_info.frame_number > last_frame_presented {
-                        crate::profiling::finish_frame(
-                            frame_info.frame_number as usize,
-                            OsTick::new(frame_info.present_time),
-                        );
-                        crate::profiling::vblank(OsTick::new(frame_info.vblank_time));
-                        last_frame_presented = frame_info.frame_number;
-                    }
-                }
-            }
-        }
-    }
-}
+//         for frame_info in &frame_infos[..num_frames as usize] {
+//             match frame_info.status {
+//                 FrameStatus::Unknown => {}
+//                 FrameStatus::Enqueued => {
+//                     if frame_info.frame_number > last_frame_enqueued {
+//                         last_frame_enqueued = frame_info.frame_number;
+//                     }
+//                 }
+//                 FrameStatus::Presented => {
+//                     if frame_info.frame_number > last_frame_presented {
+//                         crate::profiling::finish_frame(
+//                             frame_info.frame_number as usize,
+//                             OsTick::new(frame_info.present_time),
+//                         );
+//                         crate::profiling::vblank(OsTick::new(frame_info.vblank_time));
+//                         last_frame_presented = frame_info.frame_number;
+//                     }
+//                 }
+//             }
+//         }
+//     }
+// }
 
 #[skyline::hook(offset = 0x3743ca0, inline)]
 unsafe fn grab_vi_layer_handle(ctx: &InlineCtx) {
@@ -285,6 +293,7 @@ fn profile_init_ui(ctx: &InlineCtx) {
     };
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
+
 
 #[skyline::hook(offset = 0x374b524, inline)]
 fn profile_init_vfx(ctx: &InlineCtx) {
@@ -378,29 +387,33 @@ fn call_ui_update(ctx: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
-pub fn install() {
+pub fn install(config: SsbuSyncConfig) {
     Patch::in_text(0x3860674).nop().unwrap();
     Patch::in_text(0x386fca0).nop().unwrap();
     Patch::in_text(0x386fc80).nop().unwrap();
-    Patch::in_text(0x374b11c).nop().unwrap();
-    Patch::in_text(0x374b124).nop().unwrap();
     Patch::in_text(0x3810a40).data(0xD65F03C0u32).unwrap();
     Patch::in_text(0x386fcdc).nop().unwrap();
-    Patch::in_text(0x22deb84).data(0xD2800008u32).unwrap();
 
     skyline::install_hooks!(
         grab_vi_layer_handle,
         present_texture_wrapper,
         call_acquire_texture_wrapper,
-        scene_manager_update,
-        profile_init_renderpass,
-        cmdbuf_reset_span_start,
-        cmdbuf_reset_span_end,
-        mutex_lock_span_begin,
-        mutex_lock_span_end,
-        looping_span_begin,
-        looping_span_end,
-        call_ui_update,
         profile_sync_wait,
     );
+
+    if config.profiling {
+        Patch::in_text(0x374b11c).nop().unwrap();
+        Patch::in_text(0x374b124).nop().unwrap();
+        skyline::install_hooks!(
+            scene_manager_update,
+            profile_init_renderpass,
+            cmdbuf_reset_span_start,
+            cmdbuf_reset_span_end,
+            mutex_lock_span_begin,
+            mutex_lock_span_end,
+            looping_span_begin,
+            looping_span_end,
+            call_ui_update
+        );
+    }
 }

@@ -11,13 +11,18 @@ mod vsync_history;
 pub mod render;
 pub mod compatibility;
 
+use render::buffer_swap::*;
+use swapchain::*;
+
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub struct SsbuSyncConfig {
     pub disable_vsync: bool,
     pub disable_pacer: bool,
+    pub slow_pacer_bias: bool,
     pub enable_triple_buffer: bool,
     pub doubles_fix: bool,
+    pub profiling: bool,
     pub emulator_check: Option<bool>,
 }
 
@@ -26,8 +31,10 @@ impl Default for SsbuSyncConfig {
         Self {
             disable_vsync: true,
             disable_pacer: false,
+            slow_pacer_bias: false,
             enable_triple_buffer: false,
             doubles_fix: false,
+            profiling: false,
             emulator_check: Some(is_emulator()),
         }
     }
@@ -131,7 +138,6 @@ pub extern "C" fn ssbusync_is_enabled() -> u32 {
     ENABLED.load(Ordering::Acquire) as u32
 }
 
-
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
     if emulator {
@@ -139,27 +145,41 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     }
     DOUBLES_FIX.store(config.doubles_fix, Ordering::Release);
 
+    if config.profiling {
+        profiling::setup();
+    }
 
-    vsync_history::install();
+    vsync_history::install(config);
     swapchain::install(config);
     off_by_one::install();
-
-    // Emulator always forces pacer-disable
-    if config.disable_pacer || emulator {
-        pacer::install();
-    }
+    pacer::install(config);
 }
 
 pub fn Enable_Double_Buffer() {
-    if !is_emulator() && DOUBLES_FIX.load(Ordering::Acquire) {
-        unsafe { swapchain::enable_double_buffer(); }
+    let allow_buffer_swap = (!is_emulator() && DOUBLES_FIX.load(Ordering::Acquire));
+    if allow_buffer_swap {
+    start_swap_buffer(BufferMode::Double);
+    } else {
+        println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
     }
 }
 
 pub fn Enable_Triple_Buffer() {
-    if !is_emulator() && DOUBLES_FIX.load(Ordering::Acquire) {
-        unsafe { swapchain::enable_triple_buffer(); }
+    let allow_buffer_swap = (!is_emulator() && DOUBLES_FIX.load(Ordering::Acquire));
+    if allow_buffer_swap {
+    start_swap_buffer(BufferMode::Triple);
+    } else {
+        println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
     }
+}
+
+pub fn Check_Buffer_Swap() {
+    render::buffer_swap::check_swap_finished();
+}
+
+pub fn is_doubles_fix_enabled() -> bool {
+    let allow_buffer_swap = (!is_emulator() && DOUBLES_FIX.load(Ordering::Acquire) == true);
+    return allow_buffer_swap;
 }
 
 fn try_install_once() {
