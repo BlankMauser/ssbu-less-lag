@@ -14,6 +14,8 @@ pub mod compatibility;
 use render::buffer_swap::*;
 use swapchain::*;
 
+use crate::compatibility::try_claim_install;
+
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub struct SsbuSyncConfig {
@@ -59,12 +61,7 @@ unsafe extern "C" {
     pub fn change_thread_priority(thread: u64, prio: i32);
 }
 
-static ENABLED: AtomicBool = AtomicBool::new(true);
-static INSTALLED: AtomicBool = AtomicBool::new(false);
-static NRO_HOOK_REGISTERED: AtomicBool = AtomicBool::new(false);
-static DISABLER_REGISTERED: AtomicBool = AtomicBool::new(false);
 static DOUBLES_FIX: AtomicBool = AtomicBool::new(false);
-const BARRIER_MODULE_NAME: &str = "unknown";
 
 #[cfg(feature = "disabler-symbol")]
 #[no_mangle]
@@ -72,70 +69,10 @@ pub extern "C" fn ssbusync_external_disabler() -> u32 {
     1
 }
 
-fn try_claim_disabler(source: &str) -> u32 {
-    if INSTALLED.load(Ordering::Acquire) {
-        println!("[ssbusync] {source} too late (already installed)");
-        0
-    } else if DISABLER_REGISTERED
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        println!("[ssbusync] {source} rejected (another disabler already claimed)");
-        1
-    } else {
-        ENABLED.store(false, Ordering::Release);
-        println!("[ssbusync] {source} accepted (will skip install)");
-        1
-    }
-}
-
-fn try_claim_external_symbol_disabler() -> bool {
-    // Already claimed by any external
-    if DISABLER_REGISTERED.load(Ordering::Acquire) {
-        return true;
-    }
-
-    // Already Installed
-    if INSTALLED.load(Ordering::Acquire) {
-        return false;
-    }
-
-    // Probe-only check: we do not call through the symbol pointer, so multiple
-    // plugins exporting the marker is safe; any match just means "disable".
-    if !compatibility::external_disabler_wants_disable() {
-        return false;
-    }
-
-    try_claim_disabler("external disabler symbol") != 0
-}
-
-#[cfg_attr(feature = "nro-entry", no_mangle)]
-pub extern "C" fn ssbusync_set_enabled(enabled: u32) {
-    ENABLED.store(enabled != 0, Ordering::Release);
-    if enabled == 0 {
-        println!("[ssbusync] set_enabled(0) -> disabled by external module");
-    } else {
-        println!("[ssbusync] set_enabled(1) -> enabled");
-    }
-}
-
-// External override API: call this before nro barrier
-#[cfg_attr(feature = "nro-entry", no_mangle)]
-pub extern "C" fn ssbusync_request_disable() -> u32 {
-    // Legacy API path; keep behavior aligned with register_disabler.
-    try_claim_disabler("request_disable")
-}
-
-// External disabler handshake for cross-NRO plugins
-// Returns 1 if accepted before install, 0 if already installed.
-#[cfg_attr(feature = "nro-entry", no_mangle)]
-pub extern "C" fn ssbusync_register_disabler() -> u32 {
-    try_claim_disabler("register_disabler")
-}
-
-#[cfg_attr(feature = "nro-entry", no_mangle)]
-pub extern "C" fn ssbusync_is_enabled() -> u32 {
-    ENABLED.load(Ordering::Acquire) as u32
+#[cfg(feature = "nro-entry")]
+#[no_mangle]
+pub extern "C" fn ssbusync_status() -> u32 {
+    compatibility::STATUS.load(Ordering::Acquire) as u32
 }
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
@@ -177,67 +114,45 @@ pub fn Check_Buffer_Swap() {
     render::buffer_swap::check_swap_finished();
 }
 
+pub fn Check_Ssbusync_Disabled() -> bool {
+    compatibility::is_disabled()
+}
+    
 pub fn is_doubles_fix_enabled() -> bool {
     let allow_buffer_swap = (!is_emulator() && DOUBLES_FIX.load(Ordering::Acquire) == true);
     return allow_buffer_swap;
 }
 
-fn try_install_once() {
-    let _ = try_claim_external_symbol_disabler();
-
-    if DISABLER_REGISTERED.load(Ordering::Acquire) {
+fn try_install() {
+    if compatibility::should_skip_install() {
         return;
     }
-
-    if !ENABLED.load(Ordering::Acquire) {
-        return;
+    
+    if try_claim_install() {
+        println!("[ssbusync] ssbusync.nro installing");
+        Install_SSBU_Sync(SsbuSyncConfig::default());
     }
-
-    if INSTALLED
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        return;
-    }
-
-    println!("[ssbusync] SSBU-sync.nro installing");
-    Install_SSBU_Sync(SsbuSyncConfig::default());
 }
 
-pub fn notify_nro_load(info: &NroInfo) {
-    if DISABLER_REGISTERED.load(Ordering::Acquire) || !ENABLED.load(Ordering::Acquire) {
-        return;
-    }
-
-    if info.name != BARRIER_MODULE_NAME {
-        return;
-    }
-
-    println!("[ssbusync] unknown loaded -> evaluating install");
-    try_install_once();
-}
 
 fn on_nro_load(info: &NroInfo) {
-    notify_nro_load(info);
+    if !compatibility::should_skip_install() {
+        if compatibility::external_disabler() {
+            compatibility::set_disabled();
+            println!("[ssbusync] external symbol disabler detected in main; skipping hook registration.");
+            return;
+        }
+    }
+    try_install();
 }
 
 pub fn register_nro_hook() {
-    if NRO_HOOK_REGISTERED.swap(true, Ordering::AcqRel) {
-        return;
-    }
-
-    let _ = try_claim_external_symbol_disabler();
-    if DISABLER_REGISTERED.load(Ordering::Acquire) || !ENABLED.load(Ordering::Acquire) {
-        println!("[ssbusync] disabled before hook registration; skipping hook install.");
-        return;
-    }
-
     match nro::add_hook(on_nro_load) {
         Ok(()) => println!("[ssbusync] nro hook registered."),
         Err(_) => {
             // Fallback when NRO hooks are unavailable.
             println!("[ssbusync] nro hook unavailable; installing fallback path.");
-            try_install_once();
+            try_install();
         }
     }
 }
@@ -245,5 +160,10 @@ pub fn register_nro_hook() {
 #[cfg(feature = "nro-entry")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
+    if compatibility::external_disabler() {
+        compatibility::set_disabled();
+        println!("[ssbusync] external symbol disabler detected in main; skipping hook registration.");
+        return;
+    }
     register_nro_hook();
 }

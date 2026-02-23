@@ -33,5 +33,5 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 lto = true
-opt-level = 3
+opt-level = 'z'
 codegen-units = 1

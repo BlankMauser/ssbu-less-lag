@@ -13,7 +13,7 @@ fn disable_frame_pacer() {
 }
 
 pub fn patch_pacer_bias(slow_pacer_bias: bool) {
-    let imm = { 0u32 };
+    let imm = 0u32;
     // mov x8, #imm (imm16 in bits [20:5], rd=8)
     let instruction = 0xD2800008u32 | (imm << 5);
     skyline::patching::Patch::in_text(0x22deb84)
