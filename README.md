@@ -45,14 +45,25 @@ ssbusync = { git = "https://github.com/BlankMauser/ssbu-sync", default-features 
 
 That feature exports `ssbusync_external_disabler` from your plugin (not from `ssbusync.nro`), which `ssbusync.nro` probes before loading.
 
-Installing hooks from your own `#[skyline::main]`:
+Install hooks from `#[skyline::main]` by creating an SsbuSyncConfig. Example given is not comprehensive and is a personal default I'm using for HDR:
 
 ```rust
-let mut cfg = ssbusync::SsbuSyncConfig::default();
-cfg.disable_vsync = true;
-cfg.disable_pacer = false;
-ssbusync::Install_SSBU_Sync(cfg);
+fn setup_ssbu_sync() {
+    println!("[HDR] installing custom ssbusync path via Main \n");
+    let mut sync_config = SsbuSyncConfig::default();
+    sync_config.doubles_fix = false;
+    sync_config.enable_triple_buffer = true;
+    sync_config.slow_pacer_bias = true;
+    ssbusync::Install_SSBU_Sync(sync_config);
+    if ssbusync::render::buffer_swap::subscribe_buffer_mode_change(on_buffer_switch) {
+        println!("[HDR] Subscribed to buffer switch \n");
+    } else {
+        println!("[HDR] Failed to subscribe to buffer switch \n");
+    }
+}
 ```
+
+Keep in mind you will crash on boot if you have multiple plugins installing SsbuSync that don't turn on "disabler-symbol." Check your plugins folder or skyline listen logs if you're a plugin developer.
 
 ### NRO Hook Disable
 
@@ -85,4 +96,5 @@ fn on_nro_load(info: &skyline::nro::NroInfo) {
 - Multiple plugins may export `ssbusync_external_disabler`
 
 The install process can be time-sensitive so if there are any crashes its most likely from overlapping patches.
+
 
