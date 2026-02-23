@@ -6,12 +6,11 @@ use std::{
         mpsc::{Receiver, Sender},
         OnceLock,
     },
-    time::Duration,
 };
 
 #[repr(transparent)]
 #[derive(Copy, Clone)]
-pub struct OsTick(i64);
+pub struct OsTick(pub i64);
 
 impl OsTick {
     pub const fn new(tick: i64) -> Self {
@@ -51,32 +50,37 @@ enum Item {
 
 static SENDER: OnceLock<Sender<Item>> = OnceLock::new();
 
+#[inline]
+fn sender() -> Option<&'static Sender<Item>> {
+    SENDER.get()
+}
+
 pub fn start_frame(tick: OsTick) {
-    if let Some(sender) = SENDER.get() {
+    if let Some(sender) = sender() {
         let _ = sender.send(Item::FrameStart { tick });
     }
 }
 
 pub fn submit_frame(frame: usize, tick: OsTick) {
-    if let Some(sender) = SENDER.get() {
+    if let Some(sender) = sender() {
         let _ = sender.send(Item::SubmitFrame { frame, tick });
     }
 }
 
 pub fn finish_frame(frame: usize, tick: OsTick) {
-    if let Some(sender) = SENDER.get() {
+    if let Some(sender) = sender() {
         let _ = sender.send(Item::FinishFrame { frame, tick });
     }
 }
 
 pub fn start_span(name: &'static str, tick: OsTick) {
-    if let Some(sender) = SENDER.get() {
+    if let Some(sender) = sender() {
         let _ = sender.send(Item::StartSpan { name, tick });
     }
 }
 
 pub fn end_span(tick: OsTick) {
-    if let Some(sender) = SENDER.get() {
+    if let Some(sender) = sender() {
         let _ = sender.send(Item::EndSpan { tick });
     }
 }
@@ -87,7 +91,7 @@ pub fn span(name: &'static str, start: OsTick, end: OsTick) {
 }
 
 pub fn vblank(tick: OsTick) {
-    if let Some(sender) = SENDER.get() {
+    if let Some(sender) = sender() {
         let _ = sender.send(Item::VBlank { tick });
     }
 }
@@ -96,10 +100,6 @@ struct FrameSpan {
     name: &'static str,
     start: OsTick,
     end: OsTick,
-}
-
-struct FrameInFlight {
-    start: OsTick,
 }
 
 struct SubmittedFrame {
