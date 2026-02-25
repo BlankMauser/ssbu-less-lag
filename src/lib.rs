@@ -1,5 +1,6 @@
 #![allow(warnings)]
-use core::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, Ordering};
+use skyline::error::*;
 use skyline::nro::{self, NroInfo};
 mod off_by_one;
 mod pacer;
@@ -13,8 +14,10 @@ pub mod compatibility;
 
 use render::buffer_swap::*;
 use swapchain::*;
+use symbaker::symbaker;
 
-use crate::compatibility::try_claim_install;
+#[cfg(feature = "nro-entry")]
+use crate::compatibility::SSBUSyncHost::*;
 
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
@@ -72,9 +75,28 @@ pub extern "C" fn ssbusync_external_disabler() -> u32 {
 #[cfg(feature = "nro-entry")]
 #[no_mangle]
 pub extern "C" fn ssbusync_status() -> u32 {
-    compatibility::STATUS.load(Ordering::Acquire) as u32
+    STATUS.load(Ordering::Acquire) as u32
 }
 
+fn ssbusync_install_internal(config: SsbuSyncConfig) {
+    println!("ssbusync internal install");
+    let emulator = config.emulator_check.unwrap_or_else(is_emulator);
+    if emulator {
+        println!("[ssbusync] Emulator Detected. \n");
+    }
+    DOUBLES_FIX.store(config.doubles_fix, Ordering::Release);
+
+    if config.profiling {
+        profiling::setup();
+    }
+
+    vsync_history::install(config);
+    swapchain::install(config);
+    off_by_one::install();
+    pacer::install(config);
+}
+
+#[cfg(not(feature = "nro-entry"))]
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
     if emulator {
@@ -92,6 +114,7 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     pacer::install(config);
 }
 
+#[cfg(not(feature = "nro-entry"))]
 pub fn Enable_Double_Buffer() {
     let allow_buffer_swap = (!is_emulator() && DOUBLES_FIX.load(Ordering::Acquire));
     if allow_buffer_swap {
@@ -101,6 +124,7 @@ pub fn Enable_Double_Buffer() {
     }
 }
 
+#[cfg(not(feature = "nro-entry"))]
 pub fn Enable_Triple_Buffer() {
     let allow_buffer_swap = (!is_emulator() && DOUBLES_FIX.load(Ordering::Acquire));
     if allow_buffer_swap {
@@ -110,12 +134,14 @@ pub fn Enable_Triple_Buffer() {
     }
 }
 
+#[cfg(not(feature = "nro-entry"))]
 pub fn Check_Buffer_Swap() {
     render::buffer_swap::check_swap_finished();
 }
 
+#[cfg(not(feature = "nro-entry"))]
 pub fn Check_Ssbusync_Disabled() -> bool {
-    compatibility::is_disabled()
+    is_disabled()
 }
     
 pub fn is_doubles_fix_enabled() -> bool {
@@ -124,22 +150,43 @@ pub fn is_doubles_fix_enabled() -> bool {
 }
 
 fn try_install() {
-    if compatibility::should_skip_install() {
+    if should_skip_install() {
         return;
     }
     
     if try_claim_install() {
         println!("[ssbusync] ssbusync.nro installing");
-        Install_SSBU_Sync(SsbuSyncConfig::default());
+        ssbusync_install_internal(SsbuSyncConfig::default());
     }
 }
 
+fn panic_hook() {
+    std::panic::set_hook(Box::new(|info| {
+        let location = info.location().unwrap();
 
-fn on_nro_load(info: &NroInfo) {
-    if !compatibility::should_skip_install() {
+        let msg = match info.payload().downcast_ref::<&'static str>() {
+            Some(s) => *s,
+            None => match info.payload().downcast_ref::<String>() {
+                Some(s) => &s[..],
+                None => "Box<Any>"
+            }
+        };
+
+        let err_msg = format!("thread has panicked at '{}', {}", msg, location);
+        show_error(
+            69,
+            "Skyline plugin as panicked! Please open the details and send a screenshot to the developer, then close the game.\n",
+            err_msg.as_str()
+        );
+    }));
+}
+
+
+fn on_nro_load(_info: &NroInfo) {
+    if !should_skip_install() {
         if compatibility::external_disabler() {
-            compatibility::set_disabled();
-            println!("[ssbusync] external symbol disabler detected in main; skipping hook registration.");
+            set_disabled();
+            println!("[ssbusync] external symbol disabler detected; skipping install.");
             return;
         }
     }
@@ -160,10 +207,8 @@ pub fn register_nro_hook() {
 #[cfg(feature = "nro-entry")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
-    if compatibility::external_disabler() {
-        compatibility::set_disabled();
-        println!("[ssbusync] external symbol disabler detected in main; skipping hook registration.");
-        return;
-    }
+    
+    panic_hook();
+    
     register_nro_hook();
 }

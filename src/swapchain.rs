@@ -1,6 +1,7 @@
 use super::*;
 use crate::render::buffer_swap::*;
-use core::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use symbaker::{symbaker};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
 static PENDING_WINDOW_TEXTURES: AtomicU8 = AtomicU8::new(0);
@@ -238,6 +239,7 @@ unsafe fn cache_window_target_from_ctx(ctx: &skyline::hooks::InlineCtx) -> u64 {
  * This has the possibility of taking a while if the render dispatch buffers are not done yet. Should be profiled and investigated
  * in situations where frame drops happen.
  */
+#[symbaker]
 #[skyline::hook(offset = 0x3747b78, inline)]
 unsafe fn flush_swap_buffers_before_present(ctx: &skyline::hooks::InlineCtx) {
     // SAFETY: This method is only ever called in one spot, this is effectively a local variable that we are using
@@ -274,6 +276,7 @@ unsafe fn flush_swap_buffers_before_present(ctx: &skyline::hooks::InlineCtx) {
  * when there are no render dispatches to process. In combination with `flush_swap_buffers_before_present`, this hook will immediately move the pDispatchNext
  * batch into the pDispatchNow batch (first invocation) then await the pDispatchNow batch
  */
+#[symbaker]
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
     if *(arg1 as *const u8).add(0x1d18) != 0 {
@@ -293,7 +296,7 @@ unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
     // // call_original!(arg1, arg2);
 }
 
-
+#[symbaker]
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn emu_full_swapchain_flush(arg1: u64, arg2: u32) {
     call_original!(arg1, arg2);
@@ -326,22 +329,26 @@ fn use_current_frame_index() {
 // FRAMES IN FLIGHT MANAGEMENT:
 // SSBU default path is effectively (+2) over a triple-buffered ring.
 // Console double-buffer mode uses (+1) % 2.
+#[symbaker]
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_double(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 2);
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % 3);
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn use_next_frame_index_runtime(ctx: &mut skyline::hooks::InlineCtx) {
     let modulo = unsafe { FRAME_INDEX_MODULO };
     ctx.registers[9].set_x((ctx.registers[9].x() + 1) % modulo);
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x386ab4c, inline)]
 fn emu_use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x()) % 2);
@@ -368,6 +375,7 @@ fn patch_render_sync_wait() {
 //         .unwrap();
 // }
 
+#[symbaker]
 #[skyline::hook(offset = 0x38601f8, inline)]
 unsafe fn set_double_window_textures(ctx: &skyline::hooks::InlineCtx) {
     let window_target = *((ctx.registers[23].x() + 0x10) as *const u64);

@@ -26,6 +26,7 @@ serde_json = "1.0.147"
 skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
 tracing = "0.1.44"
 ngpu = { path = "ngpu" }
+symbaker = { git = "https://github.com/BlankMauser/symbaker"}
 
 [profile.dev]
 panic = "abort"

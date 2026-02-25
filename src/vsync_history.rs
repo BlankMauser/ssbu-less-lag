@@ -1,4 +1,5 @@
 use skyline::{hooks::InlineCtx, patching::Patch};
+use symbaker::symbaker;
 use crate::SsbuSyncConfig;
 
 use crate::profiling::OsTick;
@@ -66,6 +67,7 @@ static mut FRAME_INFOS: Vec<FrameInfo> = Vec::new();
 static mut LAST_ENQUEUED: usize = 0;
 static mut LAST_PRESENTED: usize = 0;
 
+#[symbaker]
 #[skyline::hook(offset = 0x386fca0, inline)]
 unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
     static mut ACQUIRE_TEXTURE_PTR: Option<extern "C" fn(u64, u64, *mut i32) -> u32> = None;
@@ -112,6 +114,7 @@ unsafe fn call_acquire_texture_wrapper(ctx: &mut InlineCtx) {
     }
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374c118, inline)]
 unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
     static mut SYNC_WAIT: Option<extern "C" fn(u64, u64) -> u64> = None;
@@ -170,6 +173,7 @@ unsafe fn profile_sync_wait(ctx: &mut InlineCtx) {
     
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x386fc80, inline)]
 unsafe fn present_texture_wrapper(ctx: &InlineCtx) {
     static mut PRESENT_TEXTURE_PTR: Option<extern "C" fn(u64, u64, i32)> = None;
@@ -242,6 +246,7 @@ unsafe fn present_texture_wrapper(ctx: &InlineCtx) {
 //     }
 // }
 
+#[symbaker]
 #[skyline::hook(offset = 0x3743ca0, inline)]
 unsafe fn grab_vi_layer_handle(ctx: &InlineCtx) {
     let p_display_info = ctx.registers[19].x();
@@ -264,6 +269,7 @@ unsafe fn grab_vi_layer_handle(ctx: &InlineCtx) {
 #[skyline::from_offset(0x3864700)]
 fn init_renderpasses(arg: u64);
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b11c, inline)]
 fn profile_init_renderpass(ctx: &InlineCtx) {
     crate::profiling::start_span(
@@ -277,6 +283,7 @@ fn profile_init_renderpass(ctx: &InlineCtx) {
 #[skyline::from_offset(0x3549170)]
 fn init_task_worker(arg1: u64, arg2: u64, arg3: u32, arg4: u32);
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b4f4, inline)]
 fn profile_init_ui(ctx: &InlineCtx) {
     crate::profiling::start_span(
@@ -294,7 +301,7 @@ fn profile_init_ui(ctx: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
-
+#[symbaker]
 #[skyline::hook(offset = 0x374b524, inline)]
 fn profile_init_vfx(ctx: &InlineCtx) {
     crate::profiling::start_span(
@@ -312,6 +319,7 @@ fn profile_init_vfx(ctx: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b554, inline)]
 fn profile_init_battle(ctx: &InlineCtx) {
     crate::profiling::start_span(
@@ -329,6 +337,7 @@ fn profile_init_battle(ctx: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b2b0)]
 fn profile_unk_taskworker1(ctx: &InlineCtx) {
     crate::profiling::start_span("UnkTaskWorker1", OsTick::new(unsafe { get_system_tick() }));
@@ -336,6 +345,7 @@ fn profile_unk_taskworker1(ctx: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x3724a80)]
 fn scene_manager_update(manager: u64) {
     crate::profiling::start_span("RunSceneManager", OsTick::new(unsafe { get_system_tick() }));
@@ -343,6 +353,7 @@ fn scene_manager_update(manager: u64) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374bd9c, inline)]
 fn cmdbuf_reset_span_start(_: &InlineCtx) {
     crate::profiling::start_span(
@@ -351,25 +362,31 @@ fn cmdbuf_reset_span_start(_: &InlineCtx) {
     );
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374bfe8, inline)]
 fn cmdbuf_reset_span_end(_: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b308, inline)]
 fn mutex_lock_span_begin(_: &InlineCtx) {
     crate::profiling::start_span("MutexLock", OsTick::new(unsafe { get_system_tick() }));
 }
+
+#[symbaker]
 #[skyline::hook(offset = 0x374b4b4, inline)]
 fn mutex_lock_span_end(_: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b130, inline)]
 fn looping_span_begin(_: &InlineCtx) {
     crate::profiling::start_span("Looping", OsTick::new(unsafe { get_system_tick() }));
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b160, inline)]
 fn looping_span_end(_: &InlineCtx) {
     crate::profiling::end_span(OsTick::new(unsafe { get_system_tick() }));
@@ -378,6 +395,7 @@ fn looping_span_end(_: &InlineCtx) {
 #[skyline::from_offset(0x3619080)]
 fn ui_update(arg: u64);
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b124, inline)]
 fn call_ui_update(ctx: &InlineCtx) {
     crate::profiling::start_span("UiUpdate", OsTick::new(unsafe { get_system_tick() }));

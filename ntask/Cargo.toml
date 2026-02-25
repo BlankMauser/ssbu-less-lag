@@ -3,8 +3,5 @@ name = "ntask"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-default = ["nro-host"]
-nro-host = []
 
 [dependencies]

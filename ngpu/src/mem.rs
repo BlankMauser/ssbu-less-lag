@@ -1,4 +1,3 @@
-#![allow(unused)]
 use crate::*;
 
 gpu_api! {

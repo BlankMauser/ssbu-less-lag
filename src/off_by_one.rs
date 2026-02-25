@@ -1,4 +1,5 @@
 use skyline::hooks::InlineCtx;
+use symbaker::symbaker;
 
 /** Updates the models of every battle object to match their animation
  *
@@ -69,6 +70,7 @@ unsafe fn start_task_worker_queue(pointer: *mut (), function_ptr: *const ()) {
  * TODO: This method should be profiled and benchmarked for how long some of these operations take. I'm pretty sure
  * it's decently fast but I don't know
  */
+#[symbaker]
 #[skyline::hook(offset = 0x374c7b4, inline)]
 pub unsafe fn post_scene_update_submit_render(ctx: &InlineCtx) {
     // SAFETY: These are basically local variables or global constants, and we cache them so that we don't have to fetch them every time from the skyline API
