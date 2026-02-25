@@ -9,9 +9,10 @@ mod profiling;
 mod sequencing;
 mod swapchain;
 mod util;
-mod online;
 //mod vsync;
 mod vsync_history;
+
+pub mod online;
 pub mod render;
 pub mod compatibility;
 pub use crate::util::env as SyncEnv;
