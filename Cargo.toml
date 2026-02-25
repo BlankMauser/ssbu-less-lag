@@ -27,6 +27,12 @@ skyline = { git = "https://github.com/ultimate-research/skyline-rs" }
 tracing = "0.1.44"
 ngpu = { path = "ngpu" }
 symbaker = { git = "https://github.com/BlankMauser/symbaker"}
+semver = "1.0.27"
+camino = "1.2.2"
+toml = "0.8.23"
+#local-latency-slider = { name = "latency_slider" , git = "https://github.com/BlankMauser/local-latency-slider" }
+#local-latency-slider = { name = "latency_slider" , path = "E:/HewDropRemix/VsyncPatchedHDR/local-latency-slider" }
+
 
 [profile.dev]
 panic = "abort"

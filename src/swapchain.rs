@@ -444,7 +444,7 @@ pub fn install(config: SsbuSyncConfig) {
     } else {
         // Console path: keep emulator-only hooks disabled.
         skyline::install_hook!(full_swapchain_flush);
-        if config.doubles_fix {
+        if config.allow_buffer_swap {
             set_runtime_frame_index_mode(config.enable_triple_buffer);
             skyline::install_hook!(use_next_frame_index_runtime);
         } else if config.enable_triple_buffer {

@@ -1,6 +1,7 @@
-use core::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicU8, Ordering};
 use crate::pacer::*;
 use crate::swapchain::*;
+use crate::SyncEnv;
 
 /// Current swapchain buffer mode.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -27,10 +28,6 @@ impl BufferMode {
     }
 }
 
-/// 0 = uninitialised, 2 = double, 3 = triple.
-static CURRENT_MODE: AtomicU8 = AtomicU8::new(0);
-/// In the middle of switching active window textures.
-static SWAPPING_BUFFER: AtomicBool = AtomicBool::new(false);
 /// Guard against immediate mode thrashing after a completed swap.
 static SWAP_COOLDOWN_FRAMES: AtomicU8 = AtomicU8::new(0);
 
@@ -41,23 +38,27 @@ static CALLBACK_COUNT: AtomicU8 = AtomicU8::new(0);
 
 // ── Query ────────────────────────────────────────────────────────────
 
-/// Returns the current buffer mode, or `None` if not yet initialised.
-pub fn current_buffer_mode() -> Option<BufferMode> {
-    BufferMode::from_u8(CURRENT_MODE.load(Ordering::Acquire))
+/// Returns the current buffer mode. Defaults to Triple before init.
+pub fn current_buffer_mode() -> BufferMode {
+    if SyncEnv::triple_enabled() {
+        BufferMode::Triple
+    } else {
+        BufferMode::Double
+    }
 }
 
 /// Returns the mode that should currently be enforced on the NVN window.
-pub fn desired_buffer_mode() -> Option<BufferMode> {
+pub fn desired_buffer_mode() -> BufferMode {
     current_buffer_mode()
 }
 
-pub fn frame_index_mode() -> Option<BufferMode> {
+pub fn frame_index_mode() -> BufferMode {
     current_buffer_mode()
 }
 
 /// Returns whether we are in the process of swapping.
 pub fn is_buffer_swapping() -> bool {
-    SWAPPING_BUFFER.load(Ordering::Acquire)
+    crate::SyncEnv::swapping_buffer()
 }
 
 /// Returns the number of active window textures by querying the cached NVN
@@ -102,8 +103,8 @@ pub fn start_swap_buffer(mode: BufferMode) -> bool {
     if SWAP_COOLDOWN_FRAMES.load(Ordering::Acquire) != 0 {
         return false;
     }
-    let prev = CURRENT_MODE.load(Ordering::Acquire);
-    if prev == mode as u8 && !is_buffer_swapping() {
+    let prev_triple = crate::SyncEnv::triple_enabled();
+    if prev_triple == (mode == BufferMode::Triple) && !is_buffer_swapping() {
         return false; // already in this mode
     }
 
@@ -118,8 +119,8 @@ pub fn start_swap_buffer(mode: BufferMode) -> bool {
 
     let desired = mode.texture_count();
     if texture_count == Some(desired) {
-        SWAPPING_BUFFER.store(false, Ordering::Release);
-        CURRENT_MODE.store(mode as u8, Ordering::Release);
+        SyncEnv::set_swapping_buffer(false);
+        SyncEnv::set_triple_enabled(mode == BufferMode::Triple);
         println!("[ssbu-sync] window already correct texture count\n");
         return false;
     }
@@ -136,8 +137,8 @@ pub fn start_swap_buffer(mode: BufferMode) -> bool {
         return false;
     }
 
-    SWAPPING_BUFFER.store(true, Ordering::Release);
-    CURRENT_MODE.store(mode as u8, Ordering::Release);
+    crate::SyncEnv::set_swapping_buffer(true);
+    crate::SyncEnv::set_triple_enabled(mode == BufferMode::Triple);
     println!("[ssbu-sync] Swapping buffer mode to {:?} ...\n", mode);
     true
 }
@@ -148,15 +149,14 @@ pub fn check_swap_finished() {
         SWAP_COOLDOWN_FRAMES.store(cooldown.saturating_sub(1), Ordering::Release);
     }
 
-    let swap_mode = CURRENT_MODE.load(Ordering::Acquire);
-    if !is_buffer_swapping() || swap_mode == 0 {
+    if !is_buffer_swapping() {
         return;
     }
 
-    if (get_active_texture_count().unwrap_or(0) as u8) == swap_mode {
-        if let Some(mode) = BufferMode::from_u8(swap_mode) {
-            finish_install_buffer(mode);
-        }
+    let desired = if crate::SyncEnv::triple_enabled() { 3 } else { 2 };
+    if (get_active_texture_count().unwrap_or(0) as u8) == desired {
+        let mode = if desired == 3 { BufferMode::Triple } else { BufferMode::Double };
+        finish_install_buffer(mode);
     }
 }
 
@@ -164,8 +164,8 @@ fn finish_install_buffer(mode: BufferMode) {
     let triple = mode == BufferMode::Triple;
     set_runtime_frame_index_mode(triple);
     patch_pacer_bias(triple);
-    SWAPPING_BUFFER.store(false, Ordering::Release);
-    CURRENT_MODE.store(mode as u8, Ordering::Release);
+    SyncEnv::set_swapping_buffer(false);
+    SyncEnv::set_triple_enabled(mode == BufferMode::Triple);
     SWAP_COOLDOWN_FRAMES.store(6, Ordering::Release);
     println!("[ssbu-sync] patched new buffer mode {:?} ...\n", mode);
     fire_callbacks(mode);
@@ -187,7 +187,8 @@ pub fn subscribe_buffer_mode_change(cb: fn(BufferMode)) -> bool {
 }
 
 pub fn init_buffer_mode(mode: BufferMode) {
-    CURRENT_MODE.store(mode as u8, Ordering::Release);
+    SyncEnv::set_swapping_buffer(false);
+    SyncEnv::set_triple_enabled(mode == BufferMode::Triple);
     SWAP_COOLDOWN_FRAMES.store(0, Ordering::Release);
     
     if crate::is_emulator() {
@@ -195,7 +196,6 @@ pub fn init_buffer_mode(mode: BufferMode) {
     }
     
     println!("[ssbu-sync] Initializing Buffer Mode {:?}", mode);
-    CURRENT_MODE.store(mode as u8, Ordering::Release);
 }
 
 fn fire_callbacks(mode: BufferMode) {
