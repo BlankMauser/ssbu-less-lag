@@ -1,4 +1,5 @@
 **/*.nro
 target
 reference
-Cargo.lock
+*.lock
+.zed
