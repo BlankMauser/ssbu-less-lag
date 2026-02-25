@@ -162,7 +162,7 @@ pub fn check_swap_finished() {
 
 fn finish_install_buffer(mode: BufferMode) {
     let triple = mode == BufferMode::Triple;
-    set_runtime_frame_index_mode(triple);
+    //set_runtime_frame_index_mode(triple);
     patch_pacer_bias(triple);
     SyncEnv::set_swapping_buffer(false);
     SyncEnv::set_triple_enabled(mode == BufferMode::Triple);

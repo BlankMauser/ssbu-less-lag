@@ -25,6 +25,12 @@ pub mod config {
 
     const DEFAULT_PROFILE_VERSION: f32 = 1.0;
 
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub enum DefaultProfileState {
+        Created,
+        Loaded,
+    }
+
     #[derive(Debug, Serialize, Deserialize, Default)]
     #[serde(default)]
     struct ConfigFile {
@@ -76,7 +82,7 @@ pub mod config {
         }
     }
 
-    pub fn load_or_create() -> io::Result<SsbuSyncConfig> {
+    pub fn load_or_create() -> io::Result<(SsbuSyncConfig, DefaultProfileState)> {
         paths::ensure_paths_exist()?;
         let path = paths::ssbusync_config();
         let mut data = load_file(&path)?;
@@ -86,11 +92,19 @@ pub mod config {
             write_file(&path, &data)?;
         }
 
-        Ok(data
+        let config = data
             .ssbusync
             .get("Default")
             .map(|entry| entry.config)
-            .unwrap_or_else(SsbuSyncConfig::default))
+            .unwrap_or_else(SsbuSyncConfig::default);
+
+        let state = if changed {
+            DefaultProfileState::Created
+        } else {
+            DefaultProfileState::Loaded
+        };
+
+        Ok((config, state))
     }
 
     pub fn get_or_make_profile(
