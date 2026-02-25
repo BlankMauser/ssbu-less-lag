@@ -15,11 +15,13 @@ pub mod EmuNetplay  {
     
     fn patch_enable_online_fix() {
         println!("[ssbusync] EnabledOnline Emulator Fix \n");
+        SyncEnv::set_online_fix_enabled(true);
         patch_zero_ahead_index();
     }
     
     fn patch_disable_online_fix() {
         println!("[ssbusync] Disabled Online Emulator Fix \n");
+        SyncEnv::set_online_fix_enabled(false);
         patch_one_ahead_index();
     }
     
