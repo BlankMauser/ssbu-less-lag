@@ -4,6 +4,25 @@ use symbaker::symbaker;
 // "disabler-symbol" feature turns off ssbusync automatically
 pub const SSBUSYNC_EXPORTED_DISABLE_SYMBOL: &[u8] = b"ssbusync_external_disabler\0";
 pub const SSBUSYNC_STATUS_SYMBOL: &[u8] = b"ssbusync_status\0";
+pub const SSBUSYNC_HOST_INFO_BOOTSTRAP_SYMBOL: &[u8] = b"ssbusync_host_info_bootstrap\0";
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct SsbuSyncHostInfo {
+    pub status: u32,
+    pub prefix_len: u32,
+    pub prefix: [u8; 16],
+}
+
+impl SsbuSyncHostInfo {
+    pub const fn empty() -> Self {
+        Self {
+            status: Status::PENDING as u32,
+            prefix_len: 0,
+            prefix: [0; 16],
+        }
+    }
+}
 
 /// Status values for the ssbusync plugin lifecycle.
 pub mod Status {
@@ -102,6 +121,39 @@ pub fn query_remote_status() -> Option<u32> {
         let func: extern "C" fn() -> u32 = core::mem::transmute(addr);
         func()
     })
+}
+
+#[cfg(not(feature = "nro-entry"))]
+pub fn query_remote_host_info() -> Option<SsbuSyncHostInfo> {
+    let addr = lookup_symbol_addr(SSBUSYNC_HOST_INFO_BOOTSTRAP_SYMBOL, "query_remote_host_info")?;
+    let mut info = SsbuSyncHostInfo::empty();
+    let rc = unsafe {
+        let func: extern "C" fn(*mut SsbuSyncHostInfo) -> u32 = core::mem::transmute(addr);
+        func(core::ptr::addr_of_mut!(info))
+    };
+    if rc != 0 {
+        return None;
+    }
+    Some(info)
+}
+
+#[cfg(not(feature = "nro-entry"))]
+pub fn query_remote_cached_prefix_bytes() -> Option<Vec<u8>> {
+    let info = query_remote_host_info()?;
+    let len = info.prefix_len as usize;
+    if len > info.prefix.len() {
+        return None;
+    }
+    if len == 0 {
+        return Some(Vec::new());
+    }
+    Some(info.prefix[..len].to_vec())
+}
+
+#[cfg(not(feature = "nro-entry"))]
+pub fn query_remote_cached_prefix_string() -> Option<String> {
+    let bytes = query_remote_cached_prefix_bytes()?;
+    String::from_utf8(bytes).ok()
 }
 
 /// Returns true if a remote ssbusync.nro is present (its status symbol exists).

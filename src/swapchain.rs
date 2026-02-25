@@ -293,6 +293,7 @@ unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
 #[symbaker]
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn emu_full_swapchain_flush(arg1: u64, arg2: u32) {
+    println!("emu flush swapchain");
     call_original!(arg1, arg2);
     call_original!(arg1, arg2);
     call_original!(arg1, arg2);
@@ -337,7 +338,13 @@ fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[symbaker]
 #[skyline::hook(offset = 0x386ab4c, inline)]
-fn emu_use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
+fn use_default_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
+    ctx.registers[9].set_x((ctx.registers[9].x() + 2) % 3);
+}
+
+#[symbaker]
+#[skyline::hook(offset = 0x386ab4c, inline)]
+fn emu_use_imm_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x()) % 2);
 }
 
@@ -410,12 +417,20 @@ pub fn try_set_window_textures(num: i32) -> bool {
     true
 }
 
-pub fn patch_one_ahead_index() {
-    skyline::install_hook!(use_next_frame_index_double);
-}
-
-pub fn patch_zero_ahead_index() {
-    skyline::install_hook!(emu_use_next_frame_index);
+pub fn toggle_one_ahead_index(one_ahead: bool) {
+    if SyncEnv::emulator_value() {
+        if one_ahead {
+            skyline::install_hooks!(emu_use_imm_frame_index);
+            return
+        }
+        skyline::install_hook!(use_next_frame_index_double);
+    } else {
+        if one_ahead {
+            skyline::install_hooks!(use_next_frame_index_triple);
+            return
+        }
+        skyline::install_hook!(use_default_frame_index);
+    }
 }
 
 pub fn install(config: SsbuSyncConfig) {
@@ -434,12 +449,12 @@ pub fn install(config: SsbuSyncConfig) {
         skyline::install_hooks!(
             flush_swap_buffers_before_present,
             emu_full_swapchain_flush,
-            emu_use_next_frame_index
+            emu_use_imm_frame_index
         );
     } else {
         // Console path: keep emulator-only hooks disabled.
         skyline::install_hooks!(full_swapchain_flush);
-        if config.enable_triple_buffer {
+        if (config.enable_triple_buffer || config.online_only) {
             skyline::install_hooks!(use_next_frame_index_triple);
         } else {
             skyline::install_hooks!(

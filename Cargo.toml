@@ -12,11 +12,11 @@ edition = "2021"
 titleid = "01006A800016E000" # Smash Ultimate
 
 [features]
-default = ["nro-entry"]
-#default = ["nro-entry"]
-latency-slider = ["local-latency-slider"]
+default = ["nro-entry", "host-instance"]
 nro-entry = []
 disabler-symbol = []
+host-instance = []
+client = []
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -32,7 +32,6 @@ symbaker = { git = "https://github.com/BlankMauser/symbaker"}
 semver = "1.0.27"
 camino = "1.2.2"
 toml = "0.8.23"
-local-latency-slider = { git = "https://github.com/BlankMauser/local-latency-slider", optional = true }
 #latency_slider = { package = "latency_slider" , path = "E:/HewDropRemix/VsyncPatchedHDR/local-latency-slider", optional = true }
 
 

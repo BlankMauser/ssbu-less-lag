@@ -1,0 +1,5 @@
+[env]
+SYMBAKER_CONFIG = 'E:\HewDropRemix\VsyncPatchedHDR\ssbu-less-lag\symbaker.toml'
+SYMBAKER_ENFORCE_INHERIT = "1"
+SYMBAKER_INITIALIZED = "1"
+SYMBAKER_REQUIRE_CONFIG = "1"
