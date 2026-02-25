@@ -25,6 +25,9 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "nro-entry")]
 use crate::compatibility::SSBUSyncHost::*;
 
+#[cfg(feature = "latency-slider")]
+pub use local_latency_slider as LatencySlider;
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default)]
 #[non_exhaustive]
@@ -94,25 +97,6 @@ pub extern "C" fn ssbusync_status() -> u32 {
     STATUS.load(Ordering::Acquire) as u32
 }
 
-// fn ssbusync_install_internal(config: SsbuSyncConfig) {
-//     println!("ssbusync internal install");
-//     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
-//     if emulator {
-//         println!("[ssbusync] Emulator Detected. \n");
-//     }
-//     SyncEnv::set_emulator_status(emulator);
-//     SyncEnv::set_allow_buffer_swap(config.allow_buffer_swap);
-
-//     if config.profiling {
-//         profiling::setup();
-//     }
-
-//     vsync_history::install(config);
-//     swapchain::install(config);
-//     off_by_one::install();
-//     pacer::install(config);
-// }
-
 
 /// Load or create a profile for `plugin_name` from `ssbusync.toml`.
 ///
@@ -162,6 +146,20 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     swapchain::install(config);
     off_by_one::install();
     pacer::install(config);
+    
+    #[cfg(feature = "latency-slider")]
+    if (emulator && config.online_only) {
+        LatencySlider::Install_Latency_Slider();
+    }
+    
+}
+
+fn enable_online_fix() {
+    
+}
+
+fn disable_online_fix() {
+    
 }
 
 #[cfg(not(feature = "nro-entry"))]
@@ -217,7 +215,24 @@ fn try_install() {
     
     if try_claim_install() {
         println!("[ssbusync] ssbusync.nro installing");
-        Install_SSBU_Sync(SsbuSyncConfig::default());
+        let config = match Config::load_or_create() {
+            Ok((config, Config::DefaultProfileState::Created)) => {
+                println!("[ssbusync] Created new Default profile in ssbusync.toml.");
+                config
+            }
+            Ok((config, Config::DefaultProfileState::Loaded)) => {
+                println!("[ssbusync] Loaded existing Default profile.");
+                config
+            }
+            Err(err) => {
+                println!(
+                    "[ssbusync] Failed to load Default profile ({}). Using built-in defaults.",
+                    err
+                );
+                SsbuSyncConfig::default()
+            }
+        };
+        Install_SSBU_Sync(config);
     }
 }
 
@@ -269,8 +284,6 @@ fn register_nro_hook() {
 #[cfg(feature = "nro-entry")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
-    
     panic_hook();
-    
     register_nro_hook();
 }

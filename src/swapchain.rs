@@ -5,7 +5,6 @@ use symbaker::{symbaker};
 
 static WINDOW_TARGET: AtomicU64 = AtomicU64::new(0);
 static PENDING_WINDOW_TEXTURES: AtomicU8 = AtomicU8::new(0);
-static mut FRAME_INDEX_MODULO: u64 = 3;
 static mut SET_WINDOW_NUM_ACTIVE_TEXTURES_FN: Option<extern "C" fn(u64, i32)> = None;
 static mut GET_WINDOW_NUM_ACTIVE_TEXTURES_FN: Option<extern "C" fn(u64) -> i32> = None;
 static mut GET_WINDOW_NUM_TEXTURES_FN: Option<extern "C" fn(u64) -> i32> = None;
@@ -65,11 +64,6 @@ fn normalize_texture_count(num: i32) -> Option<u8> {
     }
 }
 
-pub fn set_runtime_frame_index_mode(triple: bool) {
-    unsafe {
-        FRAME_INDEX_MODULO = if triple { 3 } else { 2 };
-    }
-}
 
 unsafe fn resolve_set_window_num_active_textures_fn() -> extern "C" fn(u64, i32) {
     if let Some(func_ptr) = SET_WINDOW_NUM_ACTIVE_TEXTURES_FN {
@@ -343,13 +337,6 @@ fn use_next_frame_index_triple(ctx: &mut skyline::hooks::InlineCtx) {
 
 #[symbaker]
 #[skyline::hook(offset = 0x386ab4c, inline)]
-fn use_next_frame_index_runtime(ctx: &mut skyline::hooks::InlineCtx) {
-    let modulo = unsafe { FRAME_INDEX_MODULO };
-    ctx.registers[9].set_x((ctx.registers[9].x() + 1) % modulo);
-}
-
-#[symbaker]
-#[skyline::hook(offset = 0x386ab4c, inline)]
 fn emu_use_next_frame_index(ctx: &mut skyline::hooks::InlineCtx) {
     ctx.registers[9].set_x((ctx.registers[9].x()) % 2);
 }
@@ -423,6 +410,14 @@ pub fn try_set_window_textures(num: i32) -> bool {
     true
 }
 
+pub fn patch_one_ahead_index() {
+    skyline::install_hook!(use_next_frame_index_double);
+}
+
+pub fn patch_zero_ahead_index() {
+    skyline::install_hook!(emu_use_next_frame_index);
+}
+
 pub fn install(config: SsbuSyncConfig) {
     let emulator = config.emulator_check.unwrap();
     
@@ -444,10 +439,7 @@ pub fn install(config: SsbuSyncConfig) {
     } else {
         // Console path: keep emulator-only hooks disabled.
         skyline::install_hook!(full_swapchain_flush);
-        if config.allow_buffer_swap {
-            set_runtime_frame_index_mode(config.enable_triple_buffer);
-            skyline::install_hook!(use_next_frame_index_runtime);
-        } else if config.enable_triple_buffer {
+        if config.enable_triple_buffer {
             skyline::install_hook!(use_next_frame_index_triple);
         } else {
             skyline::install_hook!(use_next_frame_index_double);
