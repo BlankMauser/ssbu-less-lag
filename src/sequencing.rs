@@ -2,7 +2,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
     time::Instant,
 };
-
+use symbaker::symbaker;
 use skyline::{hooks::InlineCtx, patching::Patch};
 
 use crate::{profiling::OsTick, vsync_history::get_system_tick};
@@ -13,6 +13,7 @@ fn patch_scene_manager_calls() {
     Patch::in_text(0x374c410).nop().unwrap();
 }
 
+#[symbaker]
 #[skyline::from_offset(0x3724a80)]
 unsafe fn run_scene_manager_impl(ptr: u64);
 
@@ -33,6 +34,7 @@ fn runner_thread(ptr: u64) {
 static mut TOP: Option<Instant> = None;
 // 374b4d4
 // Deprecated scene manager hook 
+#[symbaker]
 #[skyline::hook(offset = 0x374b290, inline)]
 pub unsafe fn run_scene_manager(ctx: &InlineCtx) {
     let ptr = *skyline::hooks::getRegionAddress(skyline::hooks::Region::Text)
@@ -58,6 +60,7 @@ pub unsafe fn run_scene_manager(ctx: &InlineCtx) {
     // }
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374c050, inline)]
 unsafe fn log_frame_duration(ctx: &InlineCtx) {
     // println!(
@@ -66,6 +69,7 @@ unsafe fn log_frame_duration(ctx: &InlineCtx) {
     // );
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x374b130, inline)]
 unsafe fn run_scene_wait(ctx: &InlineCtx) {
     // println!(
@@ -90,6 +94,7 @@ unsafe fn run_scene_wait(ctx: &InlineCtx) {
 //     );
 // }
 
+#[symbaker]
 #[skyline::hook(offset = 0x386fc80, inline)]
 unsafe fn wait_on_present_sync(ctx: &InlineCtx) {
     static mut NVN_SYNC_WAIT: Option<extern "C" fn(u64, u64)> = None;
@@ -104,6 +109,7 @@ unsafe fn wait_on_present_sync(ctx: &InlineCtx) {
     println!("Stalled {:.3}ms", now.elapsed().as_micros() as f32 / 1000.0);
 }
 
+#[symbaker]
 #[skyline::hook(offset = 0x386fcdc, inline)]
 unsafe fn queue_wait_sync(ctx: &InlineCtx) {
     static mut NVN_QUEUE_WAIT_SYNC: Option<extern "C" fn(u64, u64) -> bool> = None;
