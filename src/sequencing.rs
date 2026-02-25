@@ -13,7 +13,6 @@ fn patch_scene_manager_calls() {
     Patch::in_text(0x374c410).nop().unwrap();
 }
 
-#[symbaker]
 #[skyline::from_offset(0x3724a80)]
 unsafe fn run_scene_manager_impl(ptr: u64);
 

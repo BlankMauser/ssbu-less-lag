@@ -45,20 +45,5 @@ flag_accessors! {
     ONLINE_ONLY => 5;
     ONLINE_FIX_ENABLED => 6;
 }
-
-pub fn set_emulator_status(value: bool) {
-    let _ = ENV_FLAGS.fetch_update(Ordering::AcqRel, Ordering::Acquire, |flags| {
-        let next = (flags | EMULATOR_KNOWN) & !EMULATOR_VALUE;
-        Some(if value { next | EMULATOR_VALUE } else { next })
-    });
-}
-
-pub fn emulator_cached() -> Option<bool> {
-    if !emulator_known() {
-        None
-    } else {
-        Some(emulator_value())
-    }
     
     
-}

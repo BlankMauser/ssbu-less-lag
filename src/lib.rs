@@ -66,14 +66,14 @@ impl Default for SsbuSyncConfig {
 impl SsbuSyncConfig {}
 
 pub fn is_emulator() -> bool {
-    if let Some(cached) = SyncEnv::emulator_cached() {
-        return cached;
+    if SyncEnv::emulator_known() {
+        return SyncEnv::emulator_value();
     }
     let is_emu = unsafe {
         let text_addr = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64;
         text_addr == 0x8504000 || text_addr == 0x80004000
     };
-    SyncEnv::set_emulator_status(is_emu);
+    SyncEnv::set_emulator_value(is_emu);
     is_emu
 }
 
@@ -127,15 +127,15 @@ version: f32,) -> io::Result<SsbuSyncConfig> {
 }
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
-    #[cfg(feature = "nro-entry")]{
+    
+    #[cfg(feature = "nro-entry")]
     println!("[ssbusync] Main SsbuSync Module Installing. \n");
-    }
     
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
     if emulator {
         println!("[ssbusync] Emulator Detected. \n");
     }
-    SyncEnv::set_emulator_status(emulator);
+    SyncEnv::set_emulator_value(emulator);
     SyncEnv::set_allow_buffer_swap(config.allow_buffer_swap);
 
     if config.profiling {
