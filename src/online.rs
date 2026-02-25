@@ -25,13 +25,13 @@ pub mod EmuNetplay  {
     
 }
 
-pub mod SwitchNetplay  {
-    use crate::SyncEnv;
-    use crate::LatencySlider;
-    use crate::swapchain::*;
+// pub mod SwitchNetplay  {
+//     use crate::SyncEnv;
+//     use crate::LatencySlider;
+//     use crate::swapchain::*;
     
     
-    }
+//     }
 
     
 
