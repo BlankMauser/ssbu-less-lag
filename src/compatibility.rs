@@ -83,7 +83,7 @@ fn lookup_symbol_exists(sym_nul: &[u8], caller: &str) -> bool {
 }
 
 #[cfg(feature = "nro-entry")]
-pub fn external_disabler() -> bool {
+pub fn check_external_disabler() -> bool {
     let sym = SSBUSYNC_EXPORTED_DISABLE_SYMBOL;
     let sym_str = unsafe { core::ffi::CStr::from_ptr(sym.as_ptr().cast()) };
     println!(

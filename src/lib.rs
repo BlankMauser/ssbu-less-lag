@@ -1,5 +1,5 @@
 #![allow(warnings)]
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{Ordering};
 use std::io;
 use skyline::error::*;
 use skyline::nro::{self, NroInfo};
@@ -15,6 +15,8 @@ mod vsync_history;
 pub mod online;
 pub mod render;
 pub mod compatibility;
+#[cfg(feature = "nro-entry")]
+use crate::Config::DefaultProfileState;
 pub use crate::util::env as SyncEnv;
 pub use crate::util::file::config as Config;
 
@@ -25,6 +27,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "nro-entry")]
 use crate::compatibility::SSBUSyncHost::*;
+
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default)]
@@ -142,7 +145,7 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     Config::load_or_create();
     #[cfg(feature = "nro-entry")]
     {
-        Get_Init_SsbuSync_Profile("Default", &config, 0.1);
+        Get_Init_SsbuSync_Profile("Default", &config, 0.15);
         println!("[ssbusync] Main SsbuSync Module Installing. \n");
     }
     let mut cfg = config.clone();
@@ -218,11 +221,11 @@ fn try_install() {
     if try_claim_install() {
         println!("[ssbusync] ssbusync.nro installing");
         let config = match Config::load_or_create() {
-            Ok((config, Config::DefaultProfileState::Created)) => {
+            Ok((config, DefaultProfileState::Created)) => {
                 println!("[ssbusync] Created new Default profile in ssbusync.toml.");
                 config
             }
-            Ok((config, Config::DefaultProfileState::Loaded)) => {
+            Ok((config, DefaultProfileState::Loaded)) => {
                 println!("[ssbusync] Loaded existing Default profile.");
                 config
             }
@@ -236,6 +239,11 @@ fn try_install() {
         };
         Install_SSBU_Sync(config);
     }
+}
+
+#[cfg(feature = "nro-entry")]
+fn disabled_by_disablers_file() -> bool {
+    crate::util::file::disablers::check_disabler_mods()
 }
 
 fn panic_hook() {
@@ -259,33 +267,49 @@ fn panic_hook() {
     }));
 }
 
+// #[cfg(feature = "nro-entry")]
+// fn on_nro_load(_info: &NroInfo) {
+//     if !should_skip_install() {
+//         if disabled_by_disablers_file() {
+//             set_disabled();
+//             return;
+//         }
+//         if compatibility::check_external_disabler() {
+//             set_disabled();
+//             println!("[ssbusync] external symbol disabler detected; skipping install.");
+//             return;
+//         }
+//     }
+//     try_install();
+// }
+
+// #[cfg(feature = "nro-entry")]
+// fn register_nro_hook() {
+//     match nro::add_hook(on_nro_load) {
+//         Ok(()) => println!("[ssbusync] nro hook registered."),
+//         Err(_) => {
+//             // Fallback when NRO hooks are unavailable.
+//             println!("[ssbusync] nro hook unavailable; installing fallback path.");
+//             try_install();
+//         }
+//     }
+// }
+
 #[cfg(feature = "nro-entry")]
-fn on_nro_load(_info: &NroInfo) {
+#[skyline::main(name = "ssbusync")]
+pub fn main() {
+    panic_hook();
+    // register_nro_hook();
     if !should_skip_install() {
-        if compatibility::external_disabler() {
+        if disabled_by_disablers_file() {
+            set_disabled();
+            return;
+        }
+        if compatibility::check_external_disabler() {
             set_disabled();
             println!("[ssbusync] external symbol disabler detected; skipping install.");
             return;
         }
     }
     try_install();
-}
-
-#[cfg(feature = "nro-entry")]
-fn register_nro_hook() {
-    match nro::add_hook(on_nro_load) {
-        Ok(()) => println!("[ssbusync] nro hook registered."),
-        Err(_) => {
-            // Fallback when NRO hooks are unavailable.
-            println!("[ssbusync] nro hook unavailable; installing fallback path.");
-            try_install();
-        }
-    }
-}
-
-#[cfg(feature = "nro-entry")]
-#[skyline::main(name = "ssbusync")]
-pub fn main() {
-    panic_hook();
-    register_nro_hook();
 }

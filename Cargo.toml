@@ -30,6 +30,7 @@ symbaker = { git = "https://github.com/BlankMauser/symbaker"}
 semver = "1.0.27"
 camino = "1.2.2"
 toml = "0.8.23"
+arcropolis-api = { git = "https://github.com/Raytwo/arcropolis_api", rev = "5d100d3eb48a4591839925f74f7cf2c781f09f15" }
 
 [profile.dev]
 panic = "abort"
