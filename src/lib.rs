@@ -39,7 +39,7 @@ pub struct SsbuSyncConfig {
     pub online_only: bool,
     pub profiling: bool,
     #[serde(skip)]
-    pub emulator_check: Option<bool>,
+    pub emulator_check: bool,
     #[serde(skip)]
     pub override_config: bool,
 }
@@ -55,7 +55,7 @@ impl Default for SsbuSyncConfig {
             smooth_ffa: false,
             online_only: false,
             profiling: false,
-            emulator_check: Some(is_emulator()),
+            emulator_check: false,
             override_config: false,
         }
     }
@@ -145,23 +145,22 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
         Get_Init_SsbuSync_Profile("Default", &config, 0.1);
         println!("[ssbusync] Main SsbuSync Module Installing. \n");
     }
-
-    
-    let emulator = is_emulator();
-    if emulator {
+    let mut cfg = config.clone();
+    cfg.emulator_check = is_emulator();
+    if cfg.emulator_check {
         println!("[ssbusync] Emulator Detected. \n");
     }
-    SyncEnv::set_emulator_value(emulator);
-    SyncEnv::set_allow_buffer_swap(config.allow_buffer_swap);
+    SyncEnv::set_emulator_value(cfg.emulator_check);
+    SyncEnv::set_allow_buffer_swap(cfg.allow_buffer_swap);
 
-    if config.profiling {
+    if cfg.profiling {
         profiling::setup();
     }
 
-    vsync_history::install(config);
-    swapchain::install(config);
+    vsync_history::install(cfg);
+    swapchain::install(cfg);
     off_by_one::install();
-    pacer::install(config);
+    pacer::install(cfg);
     
 }
 
