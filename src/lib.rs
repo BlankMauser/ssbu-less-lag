@@ -125,7 +125,7 @@ version: f32,) -> io::Result<SsbuSyncConfig> {
 }
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
-    
+    Config::load_or_create();
     #[cfg(feature = "nro-entry")]
     {
         Get_Init_SsbuSync_Profile("Default", &config, 0.1);
