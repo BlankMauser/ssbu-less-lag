@@ -448,7 +448,8 @@ pub fn install(config: SsbuSyncConfig) {
         skyline::install_hooks!(
             flush_swap_buffers_before_present,
             emu_full_swapchain_flush,
-            emu_use_imm_frame_index
+            emu_use_imm_frame_index,
+            set_double_window_textures
         );
     } else {
         // Console path: keep emulator-only hooks disabled.
