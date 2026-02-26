@@ -63,7 +63,7 @@ impl Default for SsbuSyncConfig {
 
 impl SsbuSyncConfig {}
 
-pub fn is_emulator() -> bool {
+pub fn emulator_status() -> bool {
     if SyncEnv::emulator_known() {
         return SyncEnv::emulator_value();
     }
@@ -71,8 +71,22 @@ pub fn is_emulator() -> bool {
         let text_addr = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64;
         text_addr == 0x8504000 || text_addr == 0x80004000
     };
+    SyncEnv::set_emulator_known(true);
     SyncEnv::set_emulator_value(is_emu);
     is_emu
+}
+
+pub fn is_emulator() -> bool {
+    unsafe {
+        let text_addr = skyline::hooks::getRegionAddress(skyline::hooks::Region::Text) as u64;
+        if text_addr == 0x8504000 || text_addr == 0x80004000 {
+            println!("we are on Emulator");
+            return true;
+        } else {
+            println!("we are not on Emulator");
+            return false;
+        }
+    }
 }
 
 unsafe extern "C" {
@@ -133,7 +147,7 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     }
 
     
-    let emulator = config.emulator_check.unwrap_or_else(is_emulator);
+    let emulator = is_emulator();
     if emulator {
         println!("[ssbusync] Emulator Detected. \n");
     }

@@ -293,7 +293,6 @@ unsafe fn full_swapchain_flush(arg1: u64, arg2: u32) {
 #[symbaker]
 #[skyline::hook(offset = 0x384f460)]
 unsafe fn emu_full_swapchain_flush(arg1: u64, arg2: u32) {
-    println!("emu flush swapchain");
     call_original!(arg1, arg2);
     call_original!(arg1, arg2);
     call_original!(arg1, arg2);
