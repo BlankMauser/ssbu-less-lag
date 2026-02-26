@@ -433,7 +433,7 @@ pub fn toggle_one_ahead_index(one_ahead: bool) {
 }
 
 pub fn install(config: SsbuSyncConfig) {
-    let emulator = config.emulator_check.unwrap();
+    let emulator = config.emulator_check;
     
     if emulator {
         patch_swap_flush_call();

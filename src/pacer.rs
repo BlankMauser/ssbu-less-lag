@@ -22,7 +22,7 @@ pub fn patch_pacer_bias(slow_pacer_bias: bool) {
 }
 
 pub fn install(config: SsbuSyncConfig) {
-    let emulator = config.emulator_check.unwrap();
+    let emulator = config.emulator_check;
     // Emulator always forces pacer-disable.
     if config.disable_pacer || emulator {
         disable_frame_pacer();
