@@ -1,6 +1,4 @@
 #![allow(warnings)]
-use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
-use std::sync::OnceLock;
 use std::io;
 use skyline::error::*;
 use skyline::nro::{self, NroInfo};
@@ -15,19 +13,19 @@ mod vsync_history;
 
 pub mod online;
 pub mod render;
-pub mod compatibility;
+pub mod api;
+pub mod conduct;
+pub mod remote;
 pub use crate::util::env as SyncEnv;
 pub use crate::util::file::config as Config;
 
 use render::buffer_swap::*;
 use swapchain::*;
-use symbaker::*;
+use symbaker::symbaker;
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "nro-entry")]
-use crate::compatibility::SSBUSyncHost::*;
-#[cfg(all(feature = "nro-entry", feature = "host-instance"))]
-use crate::compatibility::Status::{CLAIMED, PENDING};
+#[cfg(feature = "main-nro")]
+use crate::conduct::SyncConductor::*;
 
 #[cfg(feature = "latency-slider")]
 pub use local_latency_slider as LatencySlider;
@@ -95,200 +93,98 @@ pub extern "C" fn ssbusync_external_disabler() -> u32 {
     1
 }
 
-#[cfg(feature = "host-instance")]
+#[cfg(any(feature = "host-instance", feature = "client"))]
 pub struct Instance;
 
-#[cfg(feature = "host-instance")]
-struct InstanceState {
-    // Packed ASCII host prefix split across two u64 words.
-    cached_host_prefix_lo: AtomicU64,
-    cached_host_prefix_hi: AtomicU64,
-    cached_host_prefix_len: AtomicU8,
-}
-
-#[cfg(feature = "host-instance")]
-impl InstanceState {
-    const fn new() -> Self {
-        Self {
-            cached_host_prefix_lo: AtomicU64::new(0),
-            cached_host_prefix_hi: AtomicU64::new(0),
-            cached_host_prefix_len: AtomicU8::new(0),
-        }
-    }
-}
-
-#[cfg(feature = "host-instance")]
-static INSTANCE_STATE: OnceLock<InstanceState> = OnceLock::new();
-
-#[cfg(feature = "host-instance")]
-const PREFIX_MAX_LEN: usize = util::bytes::MAX_PREFIX_LEN;
-
-#[cfg(all(feature = "host-instance", not(rust_analyzer)))]
-const RESOLVED_PREFIX: &str = symbaker::resolved_prefix!();
-#[cfg(all(feature = "host-instance", not(rust_analyzer)))]
-symbaker::assert_resolved_prefix_len!(16);
-
-#[cfg(all(feature = "host-instance", rust_analyzer))]
-const RESOLVED_PREFIX: &str = "";
-
-#[cfg(feature = "host-instance")]
-fn store_cached_prefix(prefix: &str) -> bool {
-    let Some((lo, hi, len)) = util::bytes::split_ascii_prefix(prefix) else {
-        return false;
-    };
-    let state = INSTANCE_STATE.get_or_init(InstanceState::new);
-    state.cached_host_prefix_lo.store(lo, Ordering::Release);
-    state.cached_host_prefix_hi.store(hi, Ordering::Release);
-    state.cached_host_prefix_len.store(len, Ordering::Release);
-    true
-}
-
-#[cfg(feature = "host-instance")]
-fn read_cached_prefix_parts() -> (u64, u64, usize) {
-    match INSTANCE_STATE.get() {
-        Some(state) => (
-            state.cached_host_prefix_lo.load(Ordering::Acquire),
-            state.cached_host_prefix_hi.load(Ordering::Acquire),
-            state.cached_host_prefix_len.load(Ordering::Acquire) as usize,
-        ),
-        None => (0, 0, 0),
-    }
-}
-
-#[cfg(feature = "host-instance")]
-fn build_host_info() -> compatibility::SsbuSyncHostInfo {
-    let mut info = compatibility::SsbuSyncHostInfo::empty();
-    #[cfg(feature = "nro-entry")]
-    {
-        info.status = STATUS.load(Ordering::Acquire) as u32;
-    }
-    #[cfg(not(feature = "nro-entry"))]
-    {
-        info.status = 0;
-    }
-
-    let (lo, hi, len) = read_cached_prefix_parts();
-    let capped_len = util::bytes::write_prefix_bytes(lo, hi, len, &mut info.prefix);
-    info.prefix_len = capped_len as u32;
-    info
-}
-
-#[cfg(feature = "host-instance")]
+#[cfg(any(feature = "host-instance", feature = "client"))]
 impl Instance {
     pub const fn new() -> Self {
         Self
     }
 
-    pub fn init(self) -> u32 {
-        let _ = INSTANCE_STATE.get_or_init(InstanceState::new);
-        #[cfg(feature = "nro-entry")]
-        {
-            return STATUS.load(Ordering::Acquire) as u32;
-        }
-        #[cfg(not(feature = "nro-entry"))]
-        {
-            0
+    pub fn Env_Flags(self) -> u32 {
+        SyncEnv::flags()
+    }
+
+    #[cfg(not(feature = "main-nro"))]
+    pub fn Enable_Online_Fix(self) {
+        enable_online_fix();
+    }
+
+    #[cfg(not(feature = "main-nro"))]
+    pub fn Disable_Online_Fix(self) {
+        disable_online_fix();
+    }
+
+    #[cfg(not(feature = "main-nro"))]
+    pub fn Enable_Double_Buffer(self) {
+        let allow_buffer_swap = !is_emulator() && SyncEnv::allow_buffer_swap();
+        if allow_buffer_swap {
+            start_swap_buffer(BufferMode::Double);
+        } else {
+            println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
         }
     }
 
-    pub fn claim_install_with_prefix(self, prefix: &str) -> u32 {
-        if !store_cached_prefix(prefix) {
-            return u32::MAX;
+    #[cfg(not(feature = "main-nro"))]
+    pub fn Enable_Triple_Buffer(self) {
+        let allow_buffer_swap = !is_emulator() && SyncEnv::allow_buffer_swap();
+        if allow_buffer_swap {
+            start_swap_buffer(BufferMode::Triple);
+        } else {
+            println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
         }
-        ssbusync_claim_install()
     }
 
-    pub fn claim_install_with_resolved_prefix(self) -> u32 {
-        self.claim_install_with_prefix(RESOLVED_PREFIX)
+    #[cfg(not(feature = "main-nro"))]
+    pub fn Check_Buffer_Swap(self) {
+        render::buffer_swap::check_swap_finished();
     }
 
-    pub fn cached_prefix_len(self) -> usize {
-        let (_, _, len) = read_cached_prefix_parts();
-        len
+    #[cfg(not(feature = "main-nro"))]
+    pub fn Remote_Status(self) -> Option<u32> {
+        remote::client_status()
     }
+
 }
 
 #[cfg(feature = "host-instance")]
-#[symbaker]
+pub fn Try_Claim_Install() -> u32 {
+    remote::claim_install()
+}
+
+#[cfg(feature = "host-instance")]
+pub fn Try_Claim_Install_With_Prefix(prefix: &str) -> u32 {
+    remote::claim_install_with_prefix(prefix)
+}
+
+#[cfg(feature = "host-instance")]
+pub fn Try_Claim_Install_With_Resolved_Prefix() -> u32 {
+    remote::claim_install_with_resolved_prefix()
+}
+
+#[cfg(feature = "main-nro")]
 pub extern "C" fn ssbusync_status() -> u32 {
-    #[cfg(feature = "nro-entry")]
-    {
-        STATUS.load(Ordering::Acquire) as u32
-    }
-    #[cfg(not(feature = "nro-entry"))]
-    {
-        0
-    }
+    remote::status()
 }
 
-#[cfg(feature = "host-instance")]
-#[symbaker]
-pub extern "C" fn init_ssbusync_instance() -> u32 {
-    Instance::new().init()
-}
-
-#[cfg(feature = "host-instance")]
-#[symbaker]
-pub extern "C" fn ssbusync_claim_install() -> u32 {
-    #[cfg(feature = "nro-entry")]
-    {
-        let current = STATUS.load(Ordering::Acquire);
-        if current == CLAIMED {
-            return current as u32;
-        }
-
-        match STATUS.compare_exchange(PENDING, CLAIMED, Ordering::AcqRel, Ordering::Acquire) {
-            Ok(_) => CLAIMED as u32,
-            Err(existing) => existing as u32,
-        }
-    }
-    #[cfg(not(feature = "nro-entry"))]
-    {
-        0
-    }
-}
-
-#[cfg(feature = "host-instance")]
-#[symbaker]
-pub extern "C" fn ssbusync_claim_install_resolved_prefix() -> u32 {
-    Instance::new().claim_install_with_resolved_prefix()
-}
-
-#[cfg(feature = "host-instance")]
-#[symbaker]
-pub unsafe extern "C" fn ssbusync_claim_install_with_prefix_ptr(
-    prefix_ptr: *const u8,
-    prefix_len: usize,
-) -> u32 {
-    if prefix_len == 0 {
-        return ssbusync_claim_install();
-    }
-    if prefix_ptr.is_null() {
-        return u32::MAX;
-    }
-    let bytes = unsafe { core::slice::from_raw_parts(prefix_ptr, prefix_len) };
-    let Ok(prefix) = core::str::from_utf8(bytes) else {
-        return u32::MAX;
-    };
-    if !store_cached_prefix(prefix) {
-        return u32::MAX;
-    }
-    ssbusync_claim_install()
-}
-
-/// Bootstrap symbol for clients: returns status + cached prefix in one call.
-#[cfg(feature = "host-instance")]
+#[cfg(feature = "main-nro")]
 #[no_mangle]
-pub extern "C" fn ssbusync_host_info_bootstrap(
-    out_info: *mut compatibility::SsbuSyncHostInfo,
-) -> u32 {
-    if out_info.is_null() {
-        return u32::MAX;
-    }
-    unsafe {
-        *out_info = build_host_info();
-    }
-    0
+pub extern "C" fn ssbusync_try_claim_install() -> u32 {
+    claim_for_host()
+}
+
+#[cfg(feature = "host-instance")]
+#[symbaker]
+pub extern "C" fn ssbusync_instance() -> *const api::SsbuSyncApiV1 {
+    remote::api_v1_ptr()
+}
+
+/// Fallback symbol for non-main host instances when no main ssbusync.nro exists.
+#[cfg(all(feature = "host-instance", not(feature = "main-nro")))]
+#[no_mangle]
+pub extern "C" fn ssbusync_instance_fallback() -> *const api::SsbuSyncApiV1 {
+    remote::api_v1_ptr()
 }
 
 /// Load or create a profile for `plugin_name` from `ssbusync.toml`.
@@ -320,8 +216,9 @@ version: f32,) -> io::Result<SsbuSyncConfig> {
 }
 
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
+    SyncEnv::initialize();
     
-    #[cfg(feature = "nro-entry")]
+    #[cfg(feature = "main-nro")]
     println!("[ssbusync] Main SsbuSync Module Installing. \n");
     
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
@@ -355,42 +252,32 @@ fn disable_online_fix() {
     
 }
 
-#[cfg(not(feature = "nro-entry"))]
+#[cfg(not(feature = "main-nro"))]
 pub fn Enable_Online_Fix() {
-
+    Instance::new().Enable_Online_Fix();
 }
 
-#[cfg(not(feature = "nro-entry"))]
+#[cfg(not(feature = "main-nro"))]
 pub fn Disable_Online_Fix() {
-
+    Instance::new().Disable_Online_Fix();
 }
 
-#[cfg(not(feature = "nro-entry"))]
+#[cfg(not(feature = "main-nro"))]
 pub fn Enable_Double_Buffer() {
-    let allow_buffer_swap = (!is_emulator() && SyncEnv::allow_buffer_swap());
-    if allow_buffer_swap {
-    start_swap_buffer(BufferMode::Double);
-    } else {
-        println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
-    }
+    Instance::new().Enable_Double_Buffer();
 }
 
-#[cfg(not(feature = "nro-entry"))]
+#[cfg(not(feature = "main-nro"))]
 pub fn Enable_Triple_Buffer() {
-    let allow_buffer_swap = (!is_emulator() && SyncEnv::allow_buffer_swap());
-    if allow_buffer_swap {
-    start_swap_buffer(BufferMode::Triple);
-    } else {
-        println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
-    }
+    Instance::new().Enable_Triple_Buffer();
 }
 
-#[cfg(not(feature = "nro-entry"))]
+#[cfg(not(feature = "main-nro"))]
 pub fn Check_Buffer_Swap() {
-    render::buffer_swap::check_swap_finished();
+    Instance::new().Check_Buffer_Swap();
 }
 
-// #[cfg(feature = "nro-entry")]
+// #[cfg(feature = "main-nro")]
 // pub fn Check_Ssbusync_Disabled() -> bool {
 //     // is_disabled()
 // }
@@ -400,7 +287,7 @@ pub fn is_doubles_fix_enabled() -> bool {
     return allow_buffer_swap;
 }
 
-#[cfg(feature = "nro-entry")]
+#[cfg(feature = "main-nro")]
 fn try_install() {
     if should_skip_install() {
         return;
@@ -450,10 +337,10 @@ fn panic_hook() {
     }));
 }
 
-#[cfg(feature = "nro-entry")]
+#[cfg(feature = "main-nro")]
 fn on_nro_load(_info: &NroInfo) {
     if !should_skip_install() {
-        if compatibility::external_disabler() {
+        if external_disabler() {
             set_disabled();
             println!("[ssbusync] external symbol disabler detected; skipping install.");
             return;
@@ -462,7 +349,8 @@ fn on_nro_load(_info: &NroInfo) {
     try_install();
 }
 
-#[cfg(feature = "nro-entry")]
+// This always returns ok right now; because skyline lol
+#[cfg(feature = "main-nro")]
 fn register_nro_hook() {
     match nro::add_hook(on_nro_load) {
         Ok(()) => println!("[ssbusync] nro hook registered."),
@@ -474,7 +362,7 @@ fn register_nro_hook() {
     }
 }
 
-#[cfg(feature = "nro-entry")]
+#[cfg(feature = "main-nro")]
 #[skyline::main(name = "ssbusync")]
 pub fn main() {
     panic_hook();
