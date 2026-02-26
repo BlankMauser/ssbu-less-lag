@@ -17,7 +17,9 @@ Until these issues are fixed this reassures that this mod is best used AS A PRAC
 
 The USB stuff requires some more polish, but considering that it's a very small amount of the overall input delay removed (roughly 2.5-5ms average), I would rather release this mod in it's current state and continue working on the others when I have time.
 
-Thanks for understanding!
+Thanks for understanding! 
+
+- [blu-dev](https://github.com/blu-dev/ssbu-less-lag/tree/console)
 
 ## Library Usage
 
@@ -65,36 +67,7 @@ fn setup_ssbu_sync() {
 
 Keep in mind you will crash on boot if you have multiple plugins installing SsbuSync that don't turn on "disabler-symbol." Check your plugins folder or skyline listen logs if you're a plugin developer.
 
-### NRO Hook Disable
-
-Use this if you want to wait for NRO load order and only install your custom path once.
-
-```rust
-static mut OVERRIDE_STATE: ssbusync::compatibility::OverrideState =
-    ssbusync::compatibility::OverrideState::new();
-
-#[skyline::main(name = "my_plugin")]
-pub fn main() {
-    let _ = unsafe { ssbusync::compatibility::try_claim_external_disabler() };
-    skyline::nro::add_hook(on_nro_load).expect("nro hook unavailable");
-}
-
-fn on_nro_load(info: &skyline::nro::NroInfo) {
-    let action = unsafe {
-        ssbusync::compatibility::observe_and_claim_override(info, &mut OVERRIDE_STATE)
-    };
-    if action == ssbusync::compatibility::OverrideAction::InstallCustom {
-        unsafe { ssbusync::Install_SSBU_Sync(ssbusync::SsbuSyncConfig::default()) };
-    }
-}
-```
-
-### Disable methods 
-
-- `Exported Disabler` symbol: your plugin exports `ssbusync_external_disabler` as a symbol before ssbusync is loaded.
-- `ssbusync_register_disabler`: your plugin registers to ssbu-syncs exported symbol before its loaded.
-- Multiple plugins may export `ssbusync_external_disabler`
-
 The install process can be time-sensitive so if there are any crashes its most likely from overlapping patches.
+
 
 
