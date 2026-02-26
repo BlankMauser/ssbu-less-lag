@@ -1,42 +1,41 @@
+use crate::SyncEnv;
 
-#[cfg(feature = "latency-slider")]
-pub mod EmuNetplay  {
+pub fn ToggleOnlineFix(toggle: bool) {
+        if SyncEnv::emulator_value() {
+            EmuNetplay::toggle_online_fix_emu(toggle);
+        } else {
+            SwitchNetplay::toggle_online_fix_switch(toggle);
+        }
+}
+
+pub mod EmuNetplay  
+{
     use crate::SyncEnv;
-    use crate::LatencySlider;
     use crate::swapchain::*;
     
-    pub fn check_online_fix_emu() {
-        if (LatencySlider::Is_Online() && !SyncEnv::online_fix_enabled()) {
-            patch_enable_online_fix();
-        } else {
-            patch_disable_online_fix();
+    pub fn toggle_online_fix_emu(toggle: bool) 
+    {
+        if (SyncEnv::online_fix_enabled() != toggle) 
+        {
+            toggle_one_ahead_index(toggle);
+            SyncEnv::set_online_fix_enabled(toggle);
         }
-    }
-    
-    fn patch_enable_online_fix() {
-        println!("[ssbusync] EnabledOnline Emulator Fix \n");
-        SyncEnv::set_online_fix_enabled(true);
-        patch_zero_ahead_index();
-    }
-    
-    fn patch_disable_online_fix() {
-        println!("[ssbusync] Disabled Online Emulator Fix \n");
-        SyncEnv::set_online_fix_enabled(false);
-        patch_one_ahead_index();
     }
     
 }
 
-// pub mod SwitchNetplay  {
-//     use crate::SyncEnv;
-//     use crate::LatencySlider;
-//     use crate::swapchain::*;
+pub mod SwitchNetplay  
+{
+    use crate::SyncEnv;
+    use crate::swapchain::*;
     
+    pub fn toggle_online_fix_switch(toggle: bool) 
+    {
+        if (SyncEnv::online_fix_enabled() != toggle) 
+        {
+            toggle_one_ahead_index(toggle);
+            SyncEnv::set_online_fix_enabled(toggle);
+        }
+    }
     
-//     }
-
-    
-
-
-    
-
+}

@@ -26,9 +26,6 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "nro-entry")]
 use crate::compatibility::SSBUSyncHost::*;
 
-#[cfg(feature = "latency-slider")]
-pub use local_latency_slider as LatencySlider;
-
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 #[serde(default)]
 #[non_exhaustive]
@@ -54,9 +51,9 @@ impl Default for SsbuSyncConfig {
             disable_pacer: false,
             slow_pacer_bias: false,
             enable_triple_buffer: true,
-            allow_buffer_swap: true,
-            smooth_ffa: true,
-            online_only: true,
+            allow_buffer_swap: false,
+            smooth_ffa: false,
+            online_only: false,
             profiling: false,
             emulator_check: Some(is_emulator()),
             override_config: false,
@@ -130,7 +127,11 @@ version: f32,) -> io::Result<SsbuSyncConfig> {
 pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     
     #[cfg(feature = "nro-entry")]
-    println!("[ssbusync] Main SsbuSync Module Installing. \n");
+    {
+        Get_Init_SsbuSync_Profile("Default", &config, 0.1);
+        println!("[ssbusync] Main SsbuSync Module Installing. \n");
+    }
+
     
     let emulator = config.emulator_check.unwrap_or_else(is_emulator);
     if emulator {
@@ -148,55 +149,42 @@ pub fn Install_SSBU_Sync(config: SsbuSyncConfig) {
     off_by_one::install();
     pacer::install(config);
     
-    #[cfg(feature = "latency-slider")]
-    if (emulator && config.online_only) {
-        LatencySlider::Install_Latency_Slider();
-    }
-    
 }
 
-fn enable_online_fix() {
-    
-}
+// #[cfg(not(feature = "nro-entry"))]
+// pub fn Enable_Online_Fix() {
 
-fn disable_online_fix() {
-    
-}
+// }
 
-#[cfg(not(feature = "nro-entry"))]
-pub fn Enable_Online_Fix() {
+// #[cfg(not(feature = "nro-entry"))]
+// pub fn Disable_Online_Fix() {
 
-}
+// }
 
-#[cfg(not(feature = "nro-entry"))]
-pub fn Disable_Online_Fix() {
+// #[cfg(not(feature = "nro-entry"))]
+// pub fn Enable_Double_Buffer() {
+//     let allow_buffer_swap = (!is_emulator() && SyncEnv::allow_buffer_swap());
+//     if allow_buffer_swap {
+//     start_swap_buffer(BufferMode::Double);
+//     } else {
+//         println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
+//     }
+// }
 
-}
+// #[cfg(not(feature = "nro-entry"))]
+// pub fn Enable_Triple_Buffer() {
+//     let allow_buffer_swap = (!is_emulator() && SyncEnv::allow_buffer_swap());
+//     if allow_buffer_swap {
+//     start_swap_buffer(BufferMode::Triple);
+//     } else {
+//         println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
+//     }
+// }
 
-#[cfg(not(feature = "nro-entry"))]
-pub fn Enable_Double_Buffer() {
-    let allow_buffer_swap = (!is_emulator() && SyncEnv::allow_buffer_swap());
-    if allow_buffer_swap {
-    start_swap_buffer(BufferMode::Double);
-    } else {
-        println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
-    }
-}
-
-#[cfg(not(feature = "nro-entry"))]
-pub fn Enable_Triple_Buffer() {
-    let allow_buffer_swap = (!is_emulator() && SyncEnv::allow_buffer_swap());
-    if allow_buffer_swap {
-    start_swap_buffer(BufferMode::Triple);
-    } else {
-        println!("[ssbusync] Swapping Buffer Mode Not Allowed!");
-    }
-}
-
-#[cfg(not(feature = "nro-entry"))]
-pub fn Check_Buffer_Swap() {
-    render::buffer_swap::check_swap_finished();
-}
+// #[cfg(not(feature = "nro-entry"))]
+// pub fn Check_Buffer_Swap() {
+//     render::buffer_swap::check_swap_finished();
+// }
 
 // #[cfg(feature = "nro-entry")]
 // pub fn Check_Ssbusync_Disabled() -> bool {

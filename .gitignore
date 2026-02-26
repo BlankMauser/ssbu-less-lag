@@ -3,3 +3,4 @@ target
 reference
 *.lock
 .zed
+.symbaker
